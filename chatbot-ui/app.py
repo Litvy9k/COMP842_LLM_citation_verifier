@@ -59,7 +59,7 @@ class AutoHeightTextBrowser(QtWidgets.QTextBrowser):
 
 
 class MessageBubble(QtWidgets.QFrame):
-    def __init__(self, text: str, role: str = "assistant", parent=None):
+    def __init__(self, text: str, role: str = "chatbot", parent=None):
         super().__init__(parent)
         self.role = role
         self.setObjectName(f"bubble-{role}")
@@ -85,7 +85,7 @@ class MessageBubble(QtWidgets.QFrame):
             border: 1px solid #6699ff;
             border-radius: 12px;
         }
-        QFrame#bubble-assistant {
+        QFrame#bubble-chatbot {
             background: #d9d9d9;
             border: 1px solid #bfbfbf;
             border-radius: 12px;
@@ -295,7 +295,7 @@ class ChatWindow(QtWidgets.QMainWindow):
 
         self.add_message(
             "How can I help you today?",
-            role="assistant"
+            role="chatbot"
         )
 
         def get_list_rect_in_central():
@@ -394,13 +394,13 @@ class ChatWindow(QtWidgets.QMainWindow):
         QtCore.QTimer.singleShot(200, lambda: self.bot_reply(f"You said: {text}"))
 
     def bot_reply(self, text: str):
-        self.add_message(text, role="assistant")
+        self.add_message(text, role="chatbot")
 
     def get_bubble_max_width(self) -> int:
         vp_w = self.list_view.viewport().width()
         return max(160, int(vp_w * MAX_BUBBLE_RATIO))
 
-    def add_message(self, text: str, role: str = "assistant"):
+    def add_message(self, text: str, role: str = "chatbot"):
         container = QtWidgets.QWidget()
         h = QtWidgets.QHBoxLayout(container)
         h.setContentsMargins(8, 8, 8, 8)
