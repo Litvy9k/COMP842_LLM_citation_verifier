@@ -8,9 +8,9 @@ contract CitationRegistry is Ownable {
 
     uint256 public nextDocId = 1;
 
-    // Mapping: hashed(externalId) → docId
-    // externalId = "doi:10.xxxx/..." OR "arxiv:xxxx.xxxxx"
-    mapping(bytes32 => uint256) public externalIdToDocId;
+    // Mapping: hashed(doi) → docId
+    // doi = "10.xxxx/..." (e.g., "10.48550/arxiv.2311.05232")
+    mapping(bytes32 => uint256) public doiToDocId;
 
     // Mapping: hashed({title, authors, year}) → docId
     mapping(bytes32 => uint256) public tahToDocId; // TAH = Title+Author+Year
@@ -24,29 +24,29 @@ contract CitationRegistry is Ownable {
 
     event PaperRegistered(
         uint256 docId,
-        bytes32 indexed hashedExternalId,
+        bytes32 indexed hashedDoi,
         bytes32 indexed hashedTAH
     );
 
     function registerPaper(
-        bytes32 hashedExternalId,
+        bytes32 hashedDoi,
         bytes32 hashedTAH,
         bytes32 metadataRoot,
         bytes32 fullTextRoot
     ) external onlyOwner returns (uint256 docId) {
         // Require at least one identifier
         require(
-            hashedExternalId != bytes32(0) || hashedTAH != bytes32(0),
+            hashedDoi != bytes32(0) || hashedTAH != bytes32(0),
             "CitationRegistry: at least one identifier required"
         );
         // Require non-zero roots
         require(metadataRoot != bytes32(0), "CitationRegistry: metadataRoot required");
 
         // Prevent duplicates
-        if (hashedExternalId != bytes32(0)) {
+        if (hashedDoi != bytes32(0)) {
             require(
-                externalIdToDocId[hashedExternalId] == 0,
-                "CitationRegistry: externalId already registered"
+                doiToDocId[hashedDoi] == 0,
+                "CitationRegistry: DOI already registered"
             );
         }
         if (hashedTAH != bytes32(0)) {
@@ -57,8 +57,8 @@ contract CitationRegistry is Ownable {
         }
 
         docId = nextDocId++;
-        if (hashedExternalId != bytes32(0)) {
-            externalIdToDocId[hashedExternalId] = docId;
+        if (hashedDoi != bytes32(0)) {
+            doiToDocId[hashedDoi] = docId;
         }
         if (hashedTAH != bytes32(0)) {
             tahToDocId[hashedTAH] = docId;
@@ -69,14 +69,14 @@ contract CitationRegistry is Ownable {
             fullTextRoot: fullTextRoot
         });
 
-        emit PaperRegistered(docId, hashedExternalId, hashedTAH);
+        emit PaperRegistered(docId, hashedDoi, hashedTAH);
         return docId;
     }
 
     // --- READ FUNCTIONS (for API) ---
 
-    function getDocIdByExternalId(bytes32 hashedExternalId) external view returns (uint256) {
-        return externalIdToDocId[hashedExternalId];
+    function getDocIdByDoi(bytes32 hashedDoi) external view returns (uint256) {
+        return doiToDocId[hashedDoi];
     }
 
     function getDocIdByTAH(bytes32 hashedTAH) external view returns (uint256) {
