@@ -1,7 +1,8 @@
 ### The smart contract currently expects the following from the Merkle module (interface can be adjusted if needed):
 
 Four `bytes32` values, in this order:
-1. `hashedExternalId` → `SHA256(canonicaljson("doi:10.xxxx/..."))`
+1. `hashedDoi` → `SHA256(canonicaljson("10.3352/jeehp.2013.10.3"))`  
+   (use the full DOI string; arXiv papers use DOI format `10.48550/arxiv.XXXXX`)
 2. `hashedTAH` → `SHA256(canonicaljson({"title": "...", "authors": [...], "year": 2023}))`
 3. `metadataRoot` → Merkle root of full metadata
 4. `fullTextRoot` → Merkle root of text chunks
@@ -13,7 +14,7 @@ Four `bytes32` values, in this order:
 #### 1. **Register a paper**
 ```solidity
 function registerPaper(
-    bytes32 hashedExternalId,
+    bytes32 hashedDoi,
     bytes32 hashedTAH,
     bytes32 metadataRoot,
     bytes32 fullTextRoot
@@ -22,9 +23,9 @@ function registerPaper(
 - **Only callable by the contract owner** (i.e., the account that deployed it)
 - Returns the assigned `docId` (e.g., `1`, `2`, ...)
 
-#### 2. **Look up by external ID (DOI/arXiv)**
+#### 2. **Look up by DOI**
 ```solidity
-function getDocIdByExternalId(bytes32 hashedExternalId) external view returns (uint256)
+function getDocIdByDoi(bytes32 hashedDoi) external view returns (uint256)
 ```
 - Returns `0` if not found
 
@@ -77,12 +78,12 @@ cast send <CONTRACT_ADDR> "registerPaper(bytes32,bytes32,bytes32,bytes32)" \
   --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 
 # 8. Test lookup
-cast call <CONTRACT_ADDR> "getDocIdByExternalId(bytes32)" 0x1111111111111111111111111111111111111111111111111111111111111111
+cast call <CONTRACT_ADDR> "getDocIdByDoi(bytes32)" 0x1111111111111111111111111111111111111111111111111111111111111111
 cast call <CONTRACT_ADDR> "getPaper(uint256)" 1
 ```
 
 > The four test hashes in step 7 correspond to:  
-> 1. `hashedExternalId`  
+> 1. `hashedDoi`  
 > 2. `hashedTAH`  
 > 3. `metadataRoot`  
 > 4. `fullTextRoot`
