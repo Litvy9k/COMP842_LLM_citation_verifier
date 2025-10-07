@@ -1,9 +1,11 @@
 import sys
+import requests
 from datetime import datetime
 from PySide6 import QtCore, QtGui, QtWidgets
 
 Qt = QtCore.Qt
 MAX_BUBBLE_RATIO = 0.68
+API_URL = "http://localhost:8000/generate"
 
 
 class SendTextEdit(QtWidgets.QTextEdit):
@@ -40,7 +42,7 @@ class AutoHeightTextBrowser(QtWidgets.QTextBrowser):
         self.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Minimum)
 
     def setMaximumTextWidth(self, max_width: int):
-        self.setMaximumWidth(max(50, max_width - 24))  # leave padding room
+        self.setMaximumWidth(max(50, max_width - 24))
         self.document().setTextWidth(self.maximumWidth())
         self._relayout_to_contents()
 
@@ -103,7 +105,6 @@ class MessageBubble(QtWidgets.QFrame):
         return self.text_edit.toPlainText()
 
     def set_max_width(self, w: int):
-        """Compute final bubble width by content; wrap long lines under max width."""
         self._last_max_w = max(160, w)
         pad = 24
         min_text_w = 80
@@ -133,7 +134,7 @@ class VerticalTabButton(QtWidgets.QAbstractButton):
         self._hover = False
         self._pressed = False
         self._w = 36
-        self._h = 120 
+        self._h = 120
         self.setCursor(QtGui.QCursor(Qt.PointingHandCursor))
 
     def sizeHint(self):
@@ -282,6 +283,60 @@ class OverlayPanel(QtWidgets.QFrame):
         return self._is_open
 
 
+class TypingIndicator(QtWidgets.QFrame):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("bubble-system")
+        self.setStyleSheet("""
+            QFrame#bubble-system {
+                background: #e6ccb2;
+                border: 1px solid #d4a373;
+                border-radius: 12px;
+            }
+            QLabel { color:#553; }
+        """)
+        lay = QtWidgets.QHBoxLayout(self)
+        lay.setContentsMargins(12, 8, 12, 8)
+        lay.setSpacing(8)
+        self.label = QtWidgets.QLabel("Assistant is typing")
+        lay.addWidget(self.label)
+        self._dots = 0
+        self._timer = QtCore.QTimer(self)
+        self._timer.timeout.connect(self._tick)
+        self._timer.start(400)
+
+    def _tick(self):
+        self._dots = (self._dots + 1) % 4
+        self.label.setText("Assistant is typing" + "." * self._dots)
+
+
+class ApiWorker(QtCore.QObject):
+    finished = QtCore.Signal(str)
+    failed = QtCore.Signal(str)
+
+    def __init__(self, prompt: str, parent=None):
+        super().__init__(parent)
+        self.prompt = prompt
+
+    @QtCore.Slot()
+    def run(self):
+        try:
+            payload = {"prompt": self.prompt, "max_tokens": 200}
+            resp = requests.post(API_URL, json=payload)
+            if resp.status_code == 200:
+                data = resp.json()
+                text = data.get("response", "")
+                if "\n\n" in text:
+                    text = text.split("\n\n", 1)[1]
+                if self.prompt in text:
+                    text = text.replace(self.prompt, "").strip()
+                self.finished.emit(text.strip() or "(empty response)")
+            else:
+                self.failed.emit(f"Error {resp.status_code}: server returned an error.")
+        except Exception as e:
+            self.failed.emit(f"Request failed: {e}")
+
+
 class ChatWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -292,11 +347,10 @@ class ChatWindow(QtWidgets.QMainWindow):
 
         self.history = []
         self._bubble_items = []
+        self._typing_item = None
+        self._thread = None
 
-        self.add_message(
-            "How can I help you today?",
-            role="chatbot"
-        )
+        self.add_message("How can I help you today?", role="chatbot")
 
         def get_list_rect_in_central():
             vp = self.list_view.viewport()
@@ -390,8 +444,74 @@ class ChatWindow(QtWidgets.QMainWindow):
         if not text:
             return
         self.input.clear()
+
         self.add_message(text, role="user")
-        QtCore.QTimer.singleShot(200, lambda: self.bot_reply(f"You said: {text}"))
+
+        self.show_typing_indicator()
+
+        self.start_api_call(text)
+
+    def start_api_call(self, prompt: str):
+        if self._thread is not None:
+            try:
+                self._thread.quit()
+                self._thread.wait(50)
+            except Exception:
+                pass
+        self._thread = QtCore.QThread(self)
+        self._worker = ApiWorker(prompt)
+        self._worker.moveToThread(self._thread)
+        self._thread.started.connect(self._worker.run)
+        self._worker.finished.connect(self.on_api_success)
+        self._worker.failed.connect(self.on_api_fail)
+        self._worker.finished.connect(self._thread.quit)
+        self._worker.failed.connect(self._thread.quit)
+        self._thread.finished.connect(self._worker.deleteLater)
+        self._thread.start()
+
+    def on_api_success(self, text: str):
+        self.hide_typing_indicator()
+        self.bot_reply(text)
+
+    def on_api_fail(self, msg: str):
+        self.hide_typing_indicator()
+        self.add_message(msg, role="system")
+
+    def show_typing_indicator(self):
+        if self._typing_item is not None:
+            return
+        container = QtWidgets.QWidget()
+        h = QtWidgets.QHBoxLayout(container)
+        h.setContentsMargins(8, 8, 8, 8)
+        h.setSpacing(8)
+
+        bubble = TypingIndicator()
+        max_w = self.get_bubble_max_width()
+        bubble.setFixedWidth(min(max_w, 260))
+
+        h.addWidget(bubble, 0, Qt.AlignLeft)
+        h.addStretch(1)
+
+        item = QtWidgets.QListWidgetItem()
+        self.list_view.addItem(item)
+        self.list_view.setItemWidget(item, container)
+
+        def _sync_item_height():
+            container.layout().activate()
+            item.setSizeHint(container.sizeHint())
+        _sync_item_height()
+
+        self.list_view.scrollToBottom()
+        self._typing_item = (item, container, bubble)
+
+    def hide_typing_indicator(self):
+        if self._typing_item is None:
+            return
+        item, container, bubble = self._typing_item
+        row = self.list_view.row(item)
+        if row >= 0:
+            self.list_view.takeItem(row)
+        self._typing_item = None
 
     def bot_reply(self, text: str):
         self.add_message(text, role="chatbot")
@@ -448,6 +568,7 @@ class ChatWindow(QtWidgets.QMainWindow):
         self.list_view.clear()
         self.history.clear()
         self._bubble_items.clear()
+        self._typing_item = None
         self.status_hint.setText("Chat cleared")
 
     def save_history_as_txt(self):
@@ -462,9 +583,7 @@ class ChatWindow(QtWidgets.QMainWindow):
     def show_about(self):
         box = QtWidgets.QMessageBox(self)
         box.setWindowTitle("About")
-        box.setText(
-            "Idk what to put here.\n"
-        )
+        box.setText("Idk what to put here.\n")
         box.setIcon(QtWidgets.QMessageBox.Information)
         box.setStyleSheet(
             "QMessageBox{background:#f0f0f0;color:#222;}"
