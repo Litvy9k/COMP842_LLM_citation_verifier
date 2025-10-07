@@ -1,2 +1,3 @@
 mistral-env/
 model/
+**/__pycache__/
