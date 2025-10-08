@@ -5,8 +5,9 @@ from local_llm import LocalCausalLM
 
 def build_rag_chain(retriever, model_path):
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a helpful academic assistant. Use the provided paper content to answer the question. Cite relevant paper titles and years."),
-        ("human", "{question}\n\nRelevant paper content:\n{context}")
+        ("system", "You are a helpful academic assistant. Use the provided paper content to answer the question. Cite relevant paper titles and years. Answer concisely and stop when done."),
+        # ("human", "{question}\n\nRelevant paper content:\n{context}")
+        ("human", "{question}", "\n\n{context}")
     ])
 
     llm = LocalCausalLM(model_path=model_path)
@@ -17,4 +18,4 @@ def build_rag_chain(retriever, model_path):
         | llm
         | StrOutputParser()
     )
-    return rag_chain
+    return rag_chain, llm

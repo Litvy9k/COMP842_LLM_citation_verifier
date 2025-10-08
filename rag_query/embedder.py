@@ -1,7 +1,7 @@
 from langchain.vectorstores import FAISS
 from langchain.embeddings import HuggingFaceEmbeddings
 
-def build_vectorstore(docs, model_name="model/all-MiniLM-L6-v2"):
+def build_vectorstore(docs, model_name="../model/all-MiniLM-L6-v2"):
     embedding_model = HuggingFaceEmbeddings(model_name=model_name)
     vectorstore = FAISS.from_documents(docs, embedding_model)
     return vectorstore

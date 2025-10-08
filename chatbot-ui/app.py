@@ -5,7 +5,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 Qt = QtCore.Qt
 MAX_BUBBLE_RATIO = 0.68
-API_URL = "http://localhost:8000/generate"
+API_URL = "http://localhost:8000/rag"
 
 
 class SendTextEdit(QtWidgets.QTextEdit):
@@ -40,6 +40,7 @@ class AutoHeightTextBrowser(QtWidgets.QTextBrowser):
         self.document().contentsChanged.connect(self._relayout_to_contents)
         self.setMinimumHeight(0)
         self.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Minimum)
+        self.document().setDocumentMargin(2)
 
     def setMaximumTextWidth(self, max_width: int):
         self.setMaximumWidth(max(50, max_width - 24))
@@ -106,19 +107,21 @@ class MessageBubble(QtWidgets.QFrame):
 
     def set_max_width(self, w: int):
         self._last_max_w = max(160, w)
-        pad = 24
-        min_text_w = 80
+        bubble_side_padding = 24
+        doc_margin = int(self.text_edit.document().documentMargin())
+        safety = 6
 
-        max_text_w = max(50, self._last_max_w - pad)
+        max_text_w = max(50, self._last_max_w - bubble_side_padding - 2*doc_margin - safety)
+
         doc = self.text_edit.document()
         doc.setTextWidth(max_text_w)
         doc.adjustSize()
-
         ideal = int(doc.idealWidth())
-        used_text_w = max(min_text_w, min(max_text_w, ideal))
+
+        used_text_w = max(80, min(max_text_w, ideal)) + 2*doc_margin + safety
 
         self.text_edit.setFixedWidth(used_text_w)
-        self.setFixedWidth(used_text_w + pad)
+        self.setFixedWidth(used_text_w + bubble_side_padding)
 
         self.layout().activate()
         self.updateGeometry()

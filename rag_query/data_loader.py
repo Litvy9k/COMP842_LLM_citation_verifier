@@ -8,7 +8,7 @@ def load_documents(json_path: str) -> list[Document]:
     docs = [
         Document(
             page_content=paper["title"] + "\n" + paper["abstract"],
-            metadata={"id": paper["id"], "title": paper["title"], 
+            metadata={"title": paper["title"], 
                       "date": paper.get("date"),
                       "authors": paper.get("authors"), 
                       "journal": paper.get("journal"), 
