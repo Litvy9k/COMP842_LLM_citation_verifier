@@ -131,14 +131,35 @@ class MessageBubble(QtWidgets.QFrame):
 
 
 class VerticalTabButton(QtWidgets.QAbstractButton):
+    highlightedChanged = QtCore.Signal(bool)
+
     def __init__(self, text="CiVi", parent=None):
         super().__init__(parent)
         self.setText(text)
         self._hover = False
         self._pressed = False
+        self._highlight = False
+        self._pulse = QtCore.QVariantAnimation(self)
+        self._pulse.setStartValue(0.0)
+        self._pulse.setEndValue(1.0)
+        self._pulse.setDuration(1000)
+        self._pulse.setLoopCount(-1)
+        self._pulse.setEasingCurve(QtCore.QEasingCurve.InOutSine)
         self._w = 36
         self._h = 120
         self.setCursor(QtGui.QCursor(Qt.PointingHandCursor))
+        self._pulse.valueChanged.connect(self.update)
+
+    def setHighlighted(self, on: bool):
+        if self._highlight == on:
+            return
+        self._highlight = on
+        if on:
+            self._pulse.start()
+        else:
+            self._pulse.stop()
+        self.update()
+        self.highlightedChanged.emit(on)
 
     def sizeHint(self):
         return QtCore.QSize(self._w, self._h)
@@ -150,6 +171,7 @@ class VerticalTabButton(QtWidgets.QAbstractButton):
             self._pressed = True; self.update()
     def mouseReleaseEvent(self, e):
         if self._pressed and self.rect().contains(e.pos()):
+            self.setHighlighted(False)
             self.clicked.emit()
         self._pressed = False; self.update()
 
@@ -157,18 +179,33 @@ class VerticalTabButton(QtWidgets.QAbstractButton):
         p = QtGui.QPainter(self)
         p.setRenderHint(QtGui.QPainter.Antialiasing)
         rect = self.rect()
+        radius = 18
 
         if self._pressed:
-            bg = QtGui.QColor("#e0e0e0")
+            base_bg = QtGui.QColor("#e9eefc")
         elif self._hover:
-            bg = QtGui.QColor("#f7f7f7")
+            base_bg = QtGui.QColor("#f7f7f7")
         else:
-            bg = QtGui.QColor("#ffffff")
+            base_bg = QtGui.QColor("#ffffff")
+
+        if self._highlight:
+            k = float(self._pulse.currentValue() or 0.0)
+            mix = 0.25 + 0.50 * (0.5 - abs(k - 0.5)) * 2.0
+            blue = QtGui.QColor(22, 119, 255)
+            r = int((1 - mix) * base_bg.red()   + mix * blue.red())
+            g = int((1 - mix) * base_bg.green() + mix * blue.green())
+            b = int((1 - mix) * base_bg.blue()  + mix * blue.blue())
+            fill_bg = QtGui.QColor(r, g, b)
+        else:
+            fill_bg = base_bg
 
         path = QtGui.QPainterPath()
-        path.addRoundedRect(rect.adjusted(0, 0, -1, -1), 16, 16)
-        p.fillPath(path, bg)
-        pen = QtGui.QPen(QtGui.QColor("#cfcfcf")); pen.setWidth(1)
+        path.addRoundedRect(rect.adjusted(0, 0, -1, -1), radius, radius)
+
+        p.fillPath(path, fill_bg)
+
+        pen = QtGui.QPen(QtGui.QColor(0, 0, 0, 35))
+        pen.setWidth(1)
         p.setPen(pen)
         p.drawPath(path)
 
@@ -176,9 +213,10 @@ class VerticalTabButton(QtWidgets.QAbstractButton):
         p.translate(rect.center())
         p.rotate(-90)
         text_rect = QtCore.QRectF(-rect.height()/2, -rect.width()/2, rect.height(), rect.width())
-        pen.setColor(QtGui.QColor("#333"))
-        p.setPen(pen)
-        font = self.font(); font.setWeight(QtGui.QFont.DemiBold)
+        text_pen = QtGui.QPen(QtGui.QColor("#333"))
+        p.setPen(text_pen)
+        font = self.font()
+        font.setWeight(QtGui.QFont.DemiBold)
         p.setFont(font)
         p.drawText(text_rect, Qt.AlignCenter, self.text())
         p.restore()
@@ -192,6 +230,7 @@ class OverlayPanel(QtWidgets.QFrame):
         self._get_target_rect = target_rect_getter
         self._expanded_width = width_expanded
         self._is_open = False
+        self._civi_items = []
 
         self.setAttribute(Qt.WA_TransparentForMouseEvents, False)
         self.setStyleSheet("OverlayPanel{background: transparent;}")
@@ -222,16 +261,28 @@ class OverlayPanel(QtWidgets.QFrame):
         """)
         header.addWidget(close_btn)
 
-        body = QtWidgets.QTextBrowser()
-        body.setOpenExternalLinks(True)
-        body.setStyleSheet("QTextBrowser{border:1px solid #ccc; border-radius:8px; background:#fff; color:#222; padding:8px;}")
-        body.setPlainText("Placeholder for citation verifier info. Put the verification result here.")
+        self.list = QtWidgets.QListWidget(self.panel)
+        self.list.setAlternatingRowColors(False)
+        self.list.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+        self.list.setFocusPolicy(Qt.NoFocus)
+        self.list.setVerticalScrollMode(QtWidgets.QAbstractItemView.ScrollPerPixel)
+        self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.list.setFrameShape(QtWidgets.QFrame.NoFrame)
+        self.list.setStyleSheet("QListWidget { border: none; background: transparent; }")
+        self.list.setObjectName("civiList")
+        self.list.setFrameShape(QtWidgets.QFrame.NoFrame)
+        self.list.viewport().setAutoFillBackground(False)
+        self.list.setStyleSheet("""
+            #civiList { border: none; background: transparent; }
+            #civiList::item { margin: 0; padding: 0; border: none; background: transparent; }
+            #civiList::item:selected { background: transparent; }
+        """)
 
         p_lay = QtWidgets.QVBoxLayout(self.panel)
         p_lay.setContentsMargins(10, 10, 10, 10)
         p_lay.setSpacing(10)
         p_lay.addLayout(header)
-        p_lay.addWidget(body, 1)
+        p_lay.addWidget(self.list, 1)
 
         self.anim = QtCore.QVariantAnimation(self)
         self.anim.setDuration(220)
@@ -242,14 +293,15 @@ class OverlayPanel(QtWidgets.QFrame):
         self.tab_btn = VerticalTabButton("CiVi", self)
         self.tab_btn.setAttribute(Qt.WA_TransparentForMouseEvents, False)
         self.tab_btn.raise_()
-
         self.tab_btn.clicked.connect(self.toggle)
         close_btn.clicked.connect(self.collapse)
+        
 
     def _on_anim_step(self, value):
         w = int(value)
         self.panel.setFixedWidth(w)
         self.layout_to_target()
+        self.refresh_bubble_widths()
 
     def _anim_start(self, start, end):
         self.anim.stop()
@@ -259,14 +311,22 @@ class OverlayPanel(QtWidgets.QFrame):
 
     def layout_to_target(self):
         rect = self._get_target_rect()
-        self.setGeometry(rect)
-        cur_w = self.panel.width()
-        self.panel.setGeometry(rect.width() - cur_w, 0, cur_w, rect.height())
 
-        tab_margin = 8
-        tx = rect.width() - self.tab_btn.width() - (cur_w if cur_w > 0 else 0) - tab_margin
-        ty = (rect.height() - self.tab_btn.height()) // 2
+        panel_w = self.panel.width()
+        tab_w   = self.tab_btn.width()
+        margin  = 8
+        strip_w = panel_w + tab_w + margin
+
+        x = rect.x() + rect.width() - strip_w
+        if x < rect.x():
+            x = rect.x()
+        self.setGeometry(x, rect.y(), strip_w, rect.height())
+        self.panel.setGeometry(self.width() - panel_w, 0, panel_w, self.height())
+
+        tx = self.width() - panel_w - tab_w - margin//2
+        ty = (self.height() - self.tab_btn.height()) // 2
         self.tab_btn.move(max(0, tx), max(0, ty))
+
         self.raise_()
 
     def expand(self):
@@ -280,10 +340,62 @@ class OverlayPanel(QtWidgets.QFrame):
         self._anim_start(self.panel.width(), 0)
 
     def toggle(self):
+        self.tab_btn.setHighlighted(False)
         self.expand() if not self._is_open else self.collapse()
 
     def isOpen(self) -> bool:
         return self._is_open
+
+    def _bubble_max_width(self) -> int:
+        w = self.panel.width() if self.panel.width() > 0 else self._expanded_width
+        return max(160, int(w * 0.92))
+
+    def add_civi_message(self, text: str):
+        bubble = QtWidgets.QFrame()
+        bubble.setObjectName("civiBubble")
+        bubble.setAttribute(Qt.WA_StyledBackground, True)
+
+        bubble.setStyleSheet("""
+            #civiBubble {
+                background: #ffffff;
+                border: 1px solid #cccccc;
+                border-radius: 10px;
+            }
+            #civiBubble > * { background: transparent; }
+            QLabel { color:#222; font-size:13px; }
+            QLabel#timestamp { color:#666; font-size:11px; }   /* 时间样式 */
+        """)
+
+        inner = QtWidgets.QVBoxLayout(bubble)
+        inner.setContentsMargins(10, 8, 10, 8)
+        inner.setSpacing(6)
+
+        label = QtWidgets.QLabel(text)
+        label.setWordWrap(True)
+        label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        inner.addWidget(label)
+
+        time_label = QtWidgets.QLabel(datetime.now().strftime("%H:%M"))
+        time_label.setObjectName("timestamp")
+        inner.addWidget(time_label, 0, Qt.AlignRight)
+
+        item = QtWidgets.QListWidgetItem()
+        item.setSizeHint(bubble.sizeHint())
+        self.list.addItem(item)
+        self.list.setItemWidget(item, bubble)
+
+        self.list.scrollToBottom()
+
+        if not self._is_open:
+            self.tab_btn.setHighlighted(True)
+
+    def refresh_bubble_widths(self):
+        for i in range(self.list.count()):
+            item = self.list.item(i)
+            w = self.list.itemWidget(item)
+            if w:
+                item.setSizeHint(w.sizeHint())
+        self.list.updateGeometries()
 
 
 class TypingIndicator(QtWidgets.QFrame):
@@ -362,6 +474,9 @@ class ChatWindow(QtWidgets.QMainWindow):
 
         self.overlay = OverlayPanel(self.centralWidget(), get_list_rect_in_central, width_expanded=320)
         QtCore.QTimer.singleShot(0, self.overlay.layout_to_target)
+        
+    def civi_add_info(self, text: str):
+        self.overlay.add_civi_message(text)
 
     def _build_ui(self):
         central = QtWidgets.QWidget()
@@ -447,12 +562,11 @@ class ChatWindow(QtWidgets.QMainWindow):
         if not text:
             return
         self.input.clear()
-
         self.add_message(text, role="user")
-
         self.show_typing_indicator()
-
         self.start_api_call(text)
+        # self.add_message("You said:{}".format(text), role="chatbot")
+        # self.civi_add_info("He said:{}".format(text))
 
     def start_api_call(self, prompt: str):
         if self._thread is not None:
@@ -562,9 +676,10 @@ class ChatWindow(QtWidgets.QMainWindow):
         self.list_view.updateGeometries()
 
     def resizeEvent(self, event: QtGui.QResizeEvent) -> None:
-        super().resizeEvent(event)
+        super().resizeEventot(0, self.refresh_bubble_widths)(event)
         if hasattr(self, "overlay"):
             self.overlay.layout_to_target()
+            self.overlay.refresh_bubble_widths()
         QtCore.QTimer.singleShot(0, self.refresh_bubble_widths)
 
     def clear_history(self):
