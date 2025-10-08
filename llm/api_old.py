@@ -5,7 +5,7 @@ import torch, os
 
 app = FastAPI()
 
-model_path = os.path.expanduser("~/git_workspace/COMP842_LLM_citation_verifier/model")
+model_path = os.path.expanduser("~/git_workspace/COMP842_LLM_citation_verifier/model/mistral-7b")
 tokenizer = AutoTokenizer.from_pretrained(model_path)
 model = AutoModelForCausalLM.from_pretrained(
     model_path,
