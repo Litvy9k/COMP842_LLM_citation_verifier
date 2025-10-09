@@ -1,4 +1,5 @@
 import os
+import random
 from typing import List, Dict, Any
 
 from fastapi import FastAPI, HTTPException
@@ -27,14 +28,21 @@ rag_chain, llm = build_rag_chain(model_path=MODEL_PATH)
 # -----------------------
 # Utils
 # -----------------------
-def _collect_titles(hits) -> List[str]:
-    out = []
-    for d in hits:
-        md = getattr(d, "metadata", {}) or {}
-        t = (md.get("title") or "").strip()
-        if t:
-            out.append(t)
-    return out
+def choose_weighted_hit(hits, scheme: str = "exp", decay: float = 0.65):
+    if not hits:
+        return None
+    n = len(hits)
+
+    if scheme == "exp":
+        weights = [decay ** i for i in range(n)]
+    elif scheme == "linear":
+        weights = [n - i for i in range(n)]
+    elif scheme == "harmonic":
+        weights = [1.0 / (i + 1) for i in range(n)]
+    else:
+        weights = [1.0] * n
+
+    return random.choices(hits, weights=weights, k=1)[0]
 
 def _format_docs(docs, max_chars: int = 900) -> str:
     lines = []
@@ -95,10 +103,11 @@ async def rag_answer(q: Query):
     if not hits_all:
         return {"response": "INSUFFICIENT_EVIDENCE", "auto_revised": False}
 
-    hits = hits_all[:1]
-    titles = _collect_titles(hits)
-    top_title = titles[0] if titles else ""
+    hit = choose_weighted_hit(hits_all, scheme="exp", decay=0.65)
+    hits = [hit]
+    meta = getattr(hit, "metadata", {}) or {}
 
+    top_title = meta.get("title", "")
     sources = _format_docs(hits)
     max_toks = int(getattr(q, "max_tokens", 300) or 300)
 
@@ -110,7 +119,11 @@ async def rag_answer(q: Query):
     text1 = str(out1).strip()
 
     if top_title and (top_title.lower() in text1.lower()):
-        return {"response": text1, "auto_revised": False}
+        return {
+            "response": text1,
+            "auto_revised": False,
+            "paper_metadata": meta,
+        }
 
     forced_q = q.prompt + "\n\n" + _revise_instruction_natural(top_title)
     out2 = rag_chain.invoke({
@@ -121,6 +134,14 @@ async def rag_answer(q: Query):
     text2 = str(out2).strip()
 
     if top_title and (top_title.lower() in text2.lower()):
-        return {"response": text2, "auto_revised": True}
+        return {
+            "response": text2,
+            "auto_revised": True,
+            "paper_metadata": meta,
+        }
 
-    return {"response": "INSUFFICIENT_EVIDENCE", "auto_revised": True}
+    return {
+        "response": "INSUFFICIENT_EVIDENCE",
+        "auto_revised": True,
+        "paper_metadata": meta,
+    }

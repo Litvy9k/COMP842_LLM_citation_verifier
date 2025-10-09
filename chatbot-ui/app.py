@@ -296,7 +296,34 @@ class OverlayPanel(QtWidgets.QFrame):
         self.tab_btn.clicked.connect(self.toggle)
         close_btn.clicked.connect(self.collapse)
         
-
+        self.parentWidget().installEventFilter(self)
+        try:
+            self._target_vp = self._get_target_rect.__self__.list_view.viewport()
+            self._target_vp.installEventFilter(self)
+            self._target_list = self._get_target_rect.__self__.list_view
+            self._target_list.installEventFilter(self)
+            self._target_list.verticalScrollBar().rangeChanged.connect(
+                lambda *_: QtCore.QTimer.singleShot(0, self.layout_to_target)
+            )
+        except Exception:
+            self._target_vp = None
+        
+        self.list.installEventFilter(self)
+        self.list.viewport().installEventFilter(self)
+        
+    def eventFilter(self, obj, ev):
+        t = ev.type()
+        if t in (
+            QtCore.QEvent.Resize,
+            QtCore.QEvent.Move,
+            QtCore.QEvent.LayoutRequest,
+            QtCore.QEvent.Show,
+            QtCore.QEvent.Hide
+        ):
+            QtCore.QTimer.singleShot(0, self.layout_to_target)
+            QtCore.QTimer.singleShot(0, self.refresh_bubble_widths)
+        return super().eventFilter(obj, ev)
+            
     def _on_anim_step(self, value):
         w = int(value)
         self.panel.setFixedWidth(w)
@@ -351,10 +378,14 @@ class OverlayPanel(QtWidgets.QFrame):
         return max(160, int(w * 0.92))
 
     def add_civi_message(self, text: str):
+        row = QtWidgets.QWidget()
+        h = QtWidgets.QHBoxLayout(row)
+        h.setContentsMargins(6, 6, 6, 6)
+        h.setSpacing(6)
+
         bubble = QtWidgets.QFrame()
         bubble.setObjectName("civiBubble")
         bubble.setAttribute(Qt.WA_StyledBackground, True)
-
         bubble.setStyleSheet("""
             #civiBubble {
                 background: #ffffff;
@@ -362,39 +393,57 @@ class OverlayPanel(QtWidgets.QFrame):
                 border-radius: 10px;
             }
             #civiBubble > * { background: transparent; }
-            QLabel { color:#222; font-size:13px; }
-            QLabel#timestamp { color:#666; font-size:11px; }   /* 时间样式 */
+            QLabel#timestamp { color:#666; font-size:11px; }
         """)
+        bubble.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
 
-        inner = QtWidgets.QVBoxLayout(bubble)
-        inner.setContentsMargins(10, 8, 10, 8)
-        inner.setSpacing(6)
+        v = QtWidgets.QVBoxLayout(bubble)
+        v.setContentsMargins(10, 8, 10, 8)
+        v.setSpacing(6)
 
-        label = QtWidgets.QLabel(text)
-        label.setWordWrap(True)
-        label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        inner.addWidget(label)
+        txt = AutoHeightTextBrowser()
+        txt.setText(text)
+        v.addWidget(txt)
 
-        time_label = QtWidgets.QLabel(datetime.now().strftime("%H:%M"))
-        time_label.setObjectName("timestamp")
-        inner.addWidget(time_label, 0, Qt.AlignRight)
+        ts = QtWidgets.QLabel(datetime.now().strftime("%H:%M"))
+        ts.setObjectName("timestamp")
+        v.addWidget(ts, 0, Qt.AlignRight)
+
+        h.addWidget(bubble, 1)
 
         item = QtWidgets.QListWidgetItem()
-        item.setSizeHint(bubble.sizeHint())
         self.list.addItem(item)
-        self.list.setItemWidget(item, bubble)
+        self.list.setItemWidget(item, row)
+
+        self._update_civi_row_width(row)
 
         self.list.scrollToBottom()
 
         if not self._is_open:
             self.tab_btn.setHighlighted(True)
+            
+    def _civi_viewport_width(self) -> int:
+        vp_w = self.list.viewport().width()
+        row_margins = 6 * 2
+        bubble_margins = 10 * 2
+        safety = 6
+        return max(80, vp_w - row_margins - bubble_margins - safety)
+
+    def _update_civi_row_width(self, row_widget: QtWidgets.QWidget):
+        txt = row_widget.findChild(AutoHeightTextBrowser)
+        if txt:
+            txt.setFixedWidth(self._civi_viewport_width())
+            row_widget.layout().activate()
+            item = self.list.item(self.list.indexAt(row_widget.pos()).row())
+            if item:
+                item.setSizeHint(row_widget.sizeHint())
 
     def refresh_bubble_widths(self):
         for i in range(self.list.count()):
             item = self.list.item(i)
-            w = self.list.itemWidget(item)
-            if w:
-                item.setSizeHint(w.sizeHint())
+            row = self.list.itemWidget(item)
+            if row is not None:
+                self._update_civi_row_width(row)
         self.list.updateGeometries()
 
 
@@ -426,7 +475,7 @@ class TypingIndicator(QtWidgets.QFrame):
 
 
 class ApiWorker(QtCore.QObject):
-    finished = QtCore.Signal(str)
+    finished = QtCore.Signal(str, dict)
     failed = QtCore.Signal(str)
 
     def __init__(self, prompt: str, parent=None):
@@ -441,11 +490,12 @@ class ApiWorker(QtCore.QObject):
             if resp.status_code == 200:
                 data = resp.json()
                 text = data.get("response", "")
+                metadata = data.get("paper_metadata", {})
                 if "\n\n" in text:
                     text = text.split("\n\n", 1)[1]
                 if self.prompt in text:
                     text = text.replace(self.prompt, "").strip()
-                self.finished.emit(text.strip() or "(empty response)")
+                self.finished.emit(text.strip(), metadata)
             else:
                 self.failed.emit(f"Error {resp.status_code}: server returned an error.")
         except Exception as e:
@@ -586,10 +636,21 @@ class ChatWindow(QtWidgets.QMainWindow):
         self._thread.finished.connect(self._worker.deleteLater)
         self._thread.start()
 
-    def on_api_success(self, text: str):
+    def on_api_success(self, text: str, metadata: dict):
         self.hide_typing_indicator()
         self.bot_reply(text)
-
+        self.civi_add_info(self.debug_metadata(metadata))
+    
+    def debug_metadata(self, metadata: dict):
+        msg = "Cited paper:\nTitle: {}\nAuthors: {}\nDOI: {}\nDate: {}\nJournal: {}".format(
+            metadata.get("title"),
+            metadata.get("authors"),
+            metadata.get("doi"),
+            metadata.get("date"),
+            metadata.get("journal"),
+        )
+        return msg
+        
     def on_api_fail(self, msg: str):
         self.hide_typing_indicator()
         self.add_message(msg, role="system")
