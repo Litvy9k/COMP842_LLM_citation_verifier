@@ -4,32 +4,24 @@ from langchain_core.runnables import RunnableLambda
 from langchain_core.output_parsers import StrOutputParser
 from local_llm import LocalCausalLM
 
-
 def build_rag_chain(model_path: str):
-    """
-    精简版链：不做检索，只吃外部传入的：
-      - question: str
-      - sources: str  （已格式化好的 SOURCES 文本）
-      - allowed_ids: List[str]
-      - max_tokens: int
-    """
 
     SYSTEM = (
-        "You are a citation-faithful academic assistant.\n"
-        "- Use ONLY the SOURCES.\n"
-        "- Allowed citation ids: {allowed_ids}\n"
-        "- Every factual sentence must end with [#paper_id].\n"
-        "- Never invent ids. The literal token [#paper_id] is FORBIDDEN unless replaced by a real id from Allowed ids.\n"
-        "- If evidence is missing in SOURCES, reply exactly: INSUFFICIENT_EVIDENCE.\n"
-        "- Be concise."
+        "You are a helpful academic assistant.\n"
+        "Use ONLY the provided SOURCES to answer.\n"
+        "Write in clear, natural academic English.\n"
+        "Do NOT use citation markers like [#paper_id] and do NOT include a References section.\n"
+        "Mention exactly ONE paper (the most relevant one) by its title, year, and author(s) in plain text.\n"
+        "If the question cannot be answered from the SOURCES, reply exactly: INSUFFICIENT_EVIDENCE.\n"
+        "Be concise and factual."
     )
 
     USER = (
         "Question: {question}\n\n"
         "SOURCES:\n{sources}\n\n"
-        "Write 1–3 concise paragraphs.\n"
-        "Place [#paper_id] immediately after each factual sentence.\n"
-        "End with a short 'References' section mapping [#paper_id] -> Title (Year), DOI."
+        "Write 1 concise paragraph summarizing the SINGLE most relevant paper from SOURCES. "
+        "Include its title, year, and author(s) naturally in the text. "
+        "Do NOT mention other sources. Do NOT add a references list."
     )
 
     prompt = ChatPromptTemplate.from_messages([

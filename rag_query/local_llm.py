@@ -42,13 +42,13 @@ class LocalCausalLM(BaseLanguageModel):
         gen_ids = self._model.generate(
             **inputs,
             max_new_tokens=max_new_tokens,
-            do_sample=False,  # 关闭采样，稳定输出
+            do_sample=False,
             eos_token_id=self._tokenizer.eos_token_id,
             pad_token_id=self._tokenizer.eos_token_id,
         )
 
         input_len = inputs["input_ids"].shape[-1]
-        new_tokens = gen_ids[0][input_len:]   # 只取新增部分
+        new_tokens = gen_ids[0][input_len:]
         return self._tokenizer.decode(new_tokens, skip_special_tokens=True)
 
     def stream(self, prompt: Union[str, ChatPromptValue]):
