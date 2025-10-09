@@ -1,9 +1,9 @@
-from typing import Any, List
+from typing import Any, List, Union
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from langchain_core.prompt_values import ChatPromptValue
 from langchain_core.language_models import BaseLanguageModel
 from langchain_core.outputs import Generation
-from pydantic import PrivateAttr, ConfigDict  # v2
+from pydantic import PrivateAttr, ConfigDict
 import torch, os
 
 class LocalCausalLM(BaseLanguageModel):
@@ -24,39 +24,55 @@ class LocalCausalLM(BaseLanguageModel):
             torch_dtype=torch.float16,
         )
 
-    def invoke(self, prompt: str, config=None, **kwargs) -> str:
+    def _build_inputs(self, prompt_text: str):
+        return self._tokenizer(prompt_text, return_tensors="pt", add_special_tokens=True)
+
+    def invoke(self, prompt, config=None, **kwargs) -> str:
+        from langchain_core.prompt_values import ChatPromptValue
+
         if isinstance(prompt, ChatPromptValue):
-            prompt = prompt.to_string()
+            prompt_text = prompt.to_string()
+        else:
+            prompt_text = str(prompt)
 
-        inputs = self._tokenizer(prompt, return_tensors="pt").to(self._model.device)
-        outputs = self._model.generate(
+        inputs = self._tokenizer(prompt_text, return_tensors="pt", add_special_tokens=True)
+        inputs = {k: v.to(self._model.device) for k, v in inputs.items()}
+
+        max_new_tokens = int(kwargs.get("max_tokens", self.max_tokens))
+        gen_ids = self._model.generate(
             **inputs,
-            max_new_tokens=self.max_tokens,
-            temperature=0.3,
-            top_p=0.9,
-            do_sample=True,
+            max_new_tokens=max_new_tokens,
+            do_sample=False,  # 关闭采样，稳定输出
             eos_token_id=self._tokenizer.eos_token_id,
+            pad_token_id=self._tokenizer.eos_token_id,
         )
-        return self._tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-    def stream(self, prompt: str):
+        input_len = inputs["input_ids"].shape[-1]
+        new_tokens = gen_ids[0][input_len:]   # 只取新增部分
+        return self._tokenizer.decode(new_tokens, skip_special_tokens=True)
+
+    def stream(self, prompt: Union[str, ChatPromptValue]):
         yield self.invoke(prompt)
 
-    def batch(self, prompts: List[str]) -> List[str]:
+    def batch(self, prompts: List[Union[str, ChatPromptValue]]) -> List[str]:
         return [self.invoke(p) for p in prompts]
 
     def bind(self, **kwargs):
+        if "max_tokens" in kwargs:
+            self.max_tokens = int(kwargs["max_tokens"])
         return self
 
     def predict(self, text: str) -> str:
         return self.invoke(text)
 
     def predict_messages(self, messages: list) -> str:
-        prompt = "\n".join([msg.content for msg in messages])
-        return self.invoke(prompt)
+        if isinstance(messages, list):
+            joined = "\n".join(f"{m.get('role','user')}: {m.get('content','')}" for m in messages)
+            return self.invoke(joined)
+        return self.invoke(str(messages))
 
-    def generate_prompt(self, prompt_value):
-        result = self.invoke(prompt_value.to_string())
+    def generate_prompt(self, prompt_value: ChatPromptValue):
+        result = self.invoke(prompt_value)
         return Generation(text=result)
 
     async def apredict(self, text: str) -> str:
@@ -65,5 +81,5 @@ class LocalCausalLM(BaseLanguageModel):
     async def apredict_messages(self, messages: list) -> str:
         return self.predict_messages(messages)
 
-    async def agenerate_prompt(self, prompt_value):
+    async def agenerate_prompt(self, prompt_value: ChatPromptValue):
         return self.generate_prompt(prompt_value)
