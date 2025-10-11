@@ -19,7 +19,7 @@ def build_rag_chain(model_path: str):
     USER = (
         "Question: {question}\n\n"
         "SOURCES:\n{sources}\n\n"
-        "Write 1 concise paragraph summarizing the SINGLE most relevant paper from SOURCES. "
+        "Write 1 concise paragraph summarizing the SINGLE most relevant paper from SOURCES. Base your answer solely on SOURCES. "
         "Include its title, year, and author(s) naturally in the text. "
         "Do NOT mention other sources. Do NOT add a references list."
     )

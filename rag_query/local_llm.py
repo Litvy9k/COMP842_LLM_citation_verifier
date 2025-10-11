@@ -21,7 +21,7 @@ class LocalCausalLM(BaseLanguageModel):
         self._model = AutoModelForCausalLM.from_pretrained(
             path,
             device_map="auto",
-            torch_dtype=torch.float16,
+            dtype=torch.float16,
         )
 
     def _build_inputs(self, prompt_text: str):

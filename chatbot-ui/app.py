@@ -312,8 +312,7 @@ class OverlayPanel(QtWidgets.QFrame):
         self.list.viewport().installEventFilter(self)
         
     def eventFilter(self, obj, ev):
-        t = ev.type()
-        if t in (
+        if ev.type() in (
             QtCore.QEvent.Resize,
             QtCore.QEvent.Move,
             QtCore.QEvent.LayoutRequest,
@@ -387,12 +386,8 @@ class OverlayPanel(QtWidgets.QFrame):
         bubble.setObjectName("civiBubble")
         bubble.setAttribute(Qt.WA_StyledBackground, True)
         bubble.setStyleSheet("""
-            #civiBubble {
-                background: #ffffff;
-                border: 1px solid #cccccc;
-                border-radius: 10px;
-            }
-            #civiBubble > * { background: transparent; }
+            #civiBubble { background:#fff; border:1px solid #ccc; border-radius:10px; }
+            #civiBubble > * { background:transparent; }
             QLabel#timestamp { color:#666; font-size:11px; }
         """)
         bubble.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
@@ -410,12 +405,18 @@ class OverlayPanel(QtWidgets.QFrame):
         v.addWidget(ts, 0, Qt.AlignRight)
 
         h.addWidget(bubble, 1)
-
+        
         item = QtWidgets.QListWidgetItem()
         self.list.addItem(item)
         self.list.setItemWidget(item, row)
 
-        self._update_civi_row_width(row)
+        def sync_item_size():
+            txt.setFixedWidth(self._civi_viewport_width())
+            row.layout().activate()
+            item.setSizeHint(row.sizeHint())
+
+        QtCore.QTimer.singleShot(0, sync_item_size)
+        txt.heightChanged.connect(sync_item_size)
 
         self.list.scrollToBottom()
 
@@ -442,8 +443,13 @@ class OverlayPanel(QtWidgets.QFrame):
         for i in range(self.list.count()):
             item = self.list.item(i)
             row = self.list.itemWidget(item)
-            if row is not None:
-                self._update_civi_row_width(row)
+            if not row:
+                continue
+            txt = row.findChild(AutoHeightTextBrowser)
+            if txt:
+                txt.setFixedWidth(self._civi_viewport_width())
+            row.layout().activate()
+            item.setSizeHint(row.sizeHint())
         self.list.updateGeometries()
 
 

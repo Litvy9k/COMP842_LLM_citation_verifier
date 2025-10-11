@@ -22,12 +22,19 @@ app = FastAPI(title="RAG API", version="1.0")
 
 DOCS = load_documents(PAPER_JSON)
 VS = build_vectorstore(DOCS)
-RETRIEVER = get_retriever(VS, k=8)
+RETRIEVER = get_retriever(VS, DOCS, k=8, fetch_k=50, mmr_lambda=0.5, bm25_k=16, weights=(0.6, 0.4))
 rag_chain, llm = build_rag_chain(model_path=MODEL_PATH) 
 
 # -----------------------
 # Utils
 # -----------------------
+def retrieve_query(x) -> str:
+    if isinstance(x, str):
+        return x
+    if hasattr(x, "prompt"):
+        return getattr(x, "prompt")
+    return str(x)  # 兜底
+
 def choose_weighted_hit(hits, scheme: str = "exp", decay: float = 0.65):
     if not hits:
         return None
@@ -80,7 +87,8 @@ async def health():
 
 @app.get("/debug/retrieve")
 async def debug_retrieve(q: str, k: int = 6):
-    hits = RETRIEVER.invoke(q)[:k]
+    query_text = retrieve_query(q)
+    hits = RETRIEVER.invoke(query_text)[:k]
     results = []
     for i, d in enumerate(hits, 1):
         md = getattr(d, "metadata", {}) or {}
@@ -96,14 +104,19 @@ async def debug_retrieve(q: str, k: int = 6):
 
 @app.post("/rag")
 async def rag_answer(q: Query):
+    
     if not q.prompt:
         raise HTTPException(status_code=400, detail="prompt is required")
 
-    hits_all = RETRIEVER.invoke(q.prompt)[: int(getattr(q, "top_k", 6) or 6)]
+    # hits_all = RETRIEVER.invoke(q.prompt)[: int(getattr(q, "top_k", 6) or 6)]
+    query_text = retrieve_query(q)
+    hits_all = RETRIEVER.invoke(query_text)[: int(getattr(q, "top_k", 6) or 6)]
     if not hits_all:
         return {"response": "INSUFFICIENT_EVIDENCE", "auto_revised": False}
 
+
     hit = choose_weighted_hit(hits_all, scheme="exp", decay=0.65)
+ 
     hits = [hit]
     meta = getattr(hit, "metadata", {}) or {}
 
