@@ -1,0 +1,24 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Virtual environments
+venv/
+.env
+
+# Logs
+*.log
+
+# Data files (optional – ignore big test data)
+*.csv
+*.json
+*.txt
+
+# OS/IDE files
+.DS_Store
+.vscode/
+.idea/
+add .gitignore to omit unwanted files
