@@ -10,8 +10,8 @@ contract CitationRegistry is AccessControl {
     // Mapping: hashed(doi) → docId
     // doi = "10.xxxx/..." (e.g., "10.48550/arxiv.2311.05232")
     mapping(bytes32 => uint256) public doiToDocId;
-    // Mapping: hashed({title, authors, year}) → docId
-    mapping(bytes32 => uint256) public tahToDocId; // TAH = Title+Author+Year
+    // Mapping: hashed({title, authors, date}) → docId
+    mapping(bytes32 => uint256) public tadToDocId; // TAD = Title+Author+Date
 
     struct Paper {
         bytes32 metadataRoot;
@@ -20,30 +20,27 @@ contract CitationRegistry is AccessControl {
     mapping(uint256 => Paper) public papers;
 
     event PaperRegistered(
-        address indexed registrar,      // The backend server (msg.sender)
-        address indexed originalAdmin,  // The admin who initiated the request
         uint256 docId,
         bytes32 indexed hashedDoi,
-        bytes32 hashedTAH
+        bytes32 indexed hashedTAD
     );
 
     constructor(address initialRegistrar) {
-        // Grant the REGISTRAR_ROLE to the backend server's address during deployment
+        // Grant the REGISTRAR_ROLE to the designated address during deployment
         _grantRole(REGISTRAR_ROLE, initialRegistrar);
-        // Grant DEFAULT_ADMIN_ROLE to the deployer for future role management
+        // Explicitly grant DEFAULT_ADMIN_ROLE to the deployer to ensure retention
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
     function registerPaper(
-        address originalAdmin, // The admin who initiated the request
         bytes32 hashedDoi,
-        bytes32 hashedTAH,
+        bytes32 hashedTAD,
         bytes32 metadataRoot,
         bytes32 fullTextRoot
     ) external onlyRole(REGISTRAR_ROLE) returns (uint256 docId) {
         // Require at least one identifier
         require(
-            hashedDoi != bytes32(0) || hashedTAH != bytes32(0),
+            hashedDoi != bytes32(0) || hashedTAD != bytes32(0),
             "CitationRegistry: at least one identifier required"
         );
         // Require non-zero roots
@@ -55,26 +52,35 @@ contract CitationRegistry is AccessControl {
                 "CitationRegistry: DOI already registered"
             );
         }
-        if (hashedTAH != bytes32(0)) {
+        if (hashedTAD != bytes32(0)) {
             require(
-                tahToDocId[hashedTAH] == 0,
-                "CitationRegistry: TAH already registered"
+                tadToDocId[hashedTAD] == 0,
+                "CitationRegistry: TAD already registered"
             );
         }
         docId = nextDocId++;
         if (hashedDoi != bytes32(0)) {
             doiToDocId[hashedDoi] = docId;
         }
-        if (hashedTAH != bytes32(0)) {
-            tahToDocId[hashedTAH] = docId;
+        if (hashedTAD != bytes32(0)) {
+            tadToDocId[hashedTAD] = docId;
         }
         papers[docId] = Paper({
             metadataRoot: metadataRoot,
             fullTextRoot: fullTextRoot
         });
 
-        emit PaperRegistered(msg.sender, originalAdmin, docId, hashedDoi, hashedTAH);
+        emit PaperRegistered(docId, hashedDoi, hashedTAD);
         return docId;
+    }
+
+    // --- ADMIN MANAGEMENT FUNCTIONS ---
+    function grantRegistrarRole(address account) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        grantRole(REGISTRAR_ROLE, account);
+    }
+
+    function revokeRegistrarRole(address account) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        revokeRole(REGISTRAR_ROLE, account);
     }
 
     // --- READ FUNCTIONS (for API) ---
@@ -82,8 +88,8 @@ contract CitationRegistry is AccessControl {
         return doiToDocId[hashedDoi];
     }
 
-    function getDocIdByTAH(bytes32 hashedTAH) external view returns (uint256) {
-        return tahToDocId[hashedTAH];
+    function getDocIdByTAD(bytes32 hashedTAD) external view returns (uint256) {
+        return tadToDocId[hashedTAD];
     }
 
     function getPaper(uint256 docId) external view returns (bytes32 metadataRoot, bytes32 fullTextRoot) {
