@@ -645,7 +645,8 @@ class ChatWindow(QtWidgets.QMainWindow):
     def on_api_success(self, text: str, metadata: dict):
         self.hide_typing_indicator()
         self.bot_reply(text)
-        self.civi_add_info(self.debug_metadata(metadata))
+        if metadata:
+            self.civi_add_info(self.debug_metadata(metadata))
     
     def debug_metadata(self, metadata: dict):
         msg = "Cited paper:\nTitle: {}\nAuthors: {}\nDOI: {}\nDate: {}\nJournal: {}".format(

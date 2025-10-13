@@ -1,6 +1,9 @@
 import os
+import torch
 import random
-from typing import List, Dict, Any
+from nlp_normalizer import normalize_query_nlp
+# from typing import List, Dict, Any
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -24,16 +27,27 @@ DOCS = load_documents(PAPER_JSON)
 VS = build_vectorstore(DOCS)
 RETRIEVER = get_retriever(VS, DOCS, k=8, fetch_k=50, mmr_lambda=0.5, bm25_k=16, weights=(0.6, 0.4))
 rag_chain, llm = build_rag_chain(model_path=MODEL_PATH) 
+# tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
+# model = AutoModelForCausalLM.from_pretrained(MODEL_PATH, device_map="auto", dtype=torch.float16)
 
 # -----------------------
 # Utils
 # -----------------------
+# def is_research_query(text: str) -> bool:
+#     keywords = [
+#         "paper", "papers", "publication", "preprint", "arxiv", "doi", "journal",
+#         "cite", "citation", "reference", "references", "bibliography", "literature",
+#         "survey", "systematic review", "meta-analysis",
+#         "compare papers", "related work", "state of the art",
+#         "find me a paper", "find papers", "looking for papers",
+#     ]
+#     text_low = text.lower()
+#     return any(kw in text_low for kw in keywords)
+
 def retrieve_query(x) -> str:
-    if isinstance(x, str):
-        return x
     if hasattr(x, "prompt"):
-        return getattr(x, "prompt")
-    return str(x)  # 兜底
+        x = getattr(x, "prompt")
+    return x
 
 def choose_weighted_hit(hits, scheme: str = "exp", decay: float = 0.65):
     if not hits:
@@ -108,15 +122,45 @@ async def rag_answer(q: Query):
     if not q.prompt:
         raise HTTPException(status_code=400, detail="prompt is required")
 
-    # hits_all = RETRIEVER.invoke(q.prompt)[: int(getattr(q, "top_k", 6) or 6)]
     query_text = retrieve_query(q)
+    # if not is_research_query(query_text):
+    #     messages = [
+    #         {"role": "system", "content": "You are a helpful assistant. Answer concisely and stop when done."},
+    #         {"role": "user", "content": query_text}
+    #     ]
+    #     prompt_text = tokenizer.apply_chat_template(
+    #         messages,
+    #         tokenize=False,
+    #         add_generation_prompt=True
+    #     )
+
+    #     inputs = tokenizer(prompt_text, return_tensors="pt").to(model.device)
+        
+    #     max_toks = int(getattr(q, "max_tokens", 300) or 300)
+    #     outputs = model.generate(
+    #         **inputs,
+    #         max_new_tokens=max_toks,
+    #         temperature=0.3,
+    #         top_p=0.9,
+    #         do_sample=True,
+    #         eos_token_id=tokenizer.eos_token_id,
+    #     )
+
+    #     response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+    #     if "assistant" in response.lower():
+    #         response = response.split("assistant")[-1].strip()
+
+    #     return {"response": response}
+    # else:
+    query_text = normalize_query_nlp(query_text)
     hits_all = RETRIEVER.invoke(query_text)[: int(getattr(q, "top_k", 6) or 6)]
     if not hits_all:
         return {"response": "INSUFFICIENT_EVIDENCE", "auto_revised": False}
 
 
     hit = choose_weighted_hit(hits_all, scheme="exp", decay=0.65)
- 
+
     hits = [hit]
     meta = getattr(hit, "metadata", {}) or {}
 
