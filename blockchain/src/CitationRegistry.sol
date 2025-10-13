@@ -16,13 +16,20 @@ contract CitationRegistry is AccessControl {
     struct Paper {
         bytes32 metadataRoot;
         bytes32 fullTextRoot;
+        bool isRetracted;
     }
     mapping(uint256 => Paper) public papers;
 
     event PaperRegistered(
+        address indexed registrar,      // The address that called registerPaper (admin's wallet)
         uint256 docId,
         bytes32 indexed hashedDoi,
         bytes32 indexed hashedTAD
+    );
+
+    event PaperRetracted(
+        address indexed retractor,      // The address that called retractPaper (admin's wallet)
+        uint256 indexed docId
     );
 
     constructor(address initialRegistrar) {
@@ -45,7 +52,7 @@ contract CitationRegistry is AccessControl {
         );
         // Require non-zero roots
         require(metadataRoot != bytes32(0), "CitationRegistry: metadataRoot required");
-        // Prevent duplicates
+        // Prevent duplicates (registration is blocked even if later retracted)
         if (hashedDoi != bytes32(0)) {
             require(
                 doiToDocId[hashedDoi] == 0,
@@ -67,11 +74,22 @@ contract CitationRegistry is AccessControl {
         }
         papers[docId] = Paper({
             metadataRoot: metadataRoot,
-            fullTextRoot: fullTextRoot
+            fullTextRoot: fullTextRoot,
+            isRetracted: false
         });
 
-        emit PaperRegistered(docId, hashedDoi, hashedTAD);
+        emit PaperRegistered(msg.sender, docId, hashedDoi, hashedTAD);
         return docId;
+    }
+
+    function retractPaper(uint256 docId) external onlyRole(REGISTRAR_ROLE) {
+        // Check if the docId exists and is not already retracted
+        require(docId > 0 && docId < nextDocId, "CitationRegistry: docId does not exist");
+        require(!papers[docId].isRetracted, "CitationRegistry: paper already retracted");
+
+        papers[docId].isRetracted = true;
+
+        emit PaperRetracted(msg.sender, docId);
     }
 
     // --- ADMIN MANAGEMENT FUNCTIONS ---
@@ -92,9 +110,9 @@ contract CitationRegistry is AccessControl {
         return tadToDocId[hashedTAD];
     }
 
-    function getPaper(uint256 docId) external view returns (bytes32 metadataRoot, bytes32 fullTextRoot) {
+    function getPaper(uint256 docId) external view returns (bytes32 metadataRoot, bytes32 fullTextRoot, bool isRetractedStatus) {
         require(docId > 0 && docId < nextDocId, "CitationRegistry: invalid docId");
         Paper memory p = papers[docId];
-        return (p.metadataRoot, p.fullTextRoot);
+        return (p.metadataRoot, p.fullTextRoot, p.isRetracted);
     }
 }

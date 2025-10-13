@@ -33,13 +33,14 @@ Four bytes32 values, in this order:
 
     *   Returns 0 if not found
 
-5.  **Fetch paper roots**
+5.  **Fetch paper roots and status**
 
     ```solidity
-    function getPaper(uint256 docId) external view returns (bytes32 metadataRoot, bytes32 fullTextRoot)
+    function getPaper(uint256 docId) external view returns (bytes32 metadataRoot, bytes32 fullTextRoot, bool isRetractedStatus)
     ```
 
-    *   Reverts if `docId` is 0 or unregistered
+    *   Reverts if `docId` is 0 or unregistered.
+    *   Returns the Merkle roots and the retraction status.
 
 6.  **Grant Admin Role**
 
@@ -67,6 +68,11 @@ Four bytes32 values, in this order:
     *   Get `metadataRoot`, `fullTextRoot`, `hashedDoi`, `hashedTAD` from backend API.
     *   Call `registerPaper(bytes32 hashedDoi, bytes32 hashedTAD, bytes32 metadataRoot, bytes32 fullTextRoot)`.
     *   Transaction `msg.sender` (connected wallet) must hold `REGISTRAR_ROLE`.
+
+3.  **Retract a paper (Web Interface Signs):**
+    *   Call `retractPaper(uint256 docId)`.
+    *   Transaction `msg.sender` (connected wallet) must hold `REGISTRAR_ROLE`.
+    *   Emits `PaperRetracted` event.
 
 ### How to Test the Smart Contract (Direct Interaction)
 
@@ -144,11 +150,20 @@ Four bytes32 values, in this order:
       --private-key <ADMIN_PRIVATE_KEY>
     ```
 
-10. **Test lookup**
+10. **Retract a paper (replace `<CONTRACT_ADDR>` with the address printed in step 6)**
+    *   Replace `<DOC_ID_TO_RETRACT>` with the `docId` of the paper you want to retract.
+    *   Replace the private key in the command below with the private key of an *admin* holding `REGISTRAR_ROLE`.
+    ```bash
+    cast send <CONTRACT_ADDR> "retractPaper(uint256)" <DOC_ID_TO_RETRACT> \
+      --rpc-url http://127.0.0.1:8545 \
+      --private-key <ADMIN_PRIVATE_KEY>
+    ```
+
+11. **Test lookup**
     ```bash
     # Get docId by DOI (for the registration example)
     cast call <CONTRACT_ADDR> "getDocIdByDoi(bytes32)" 0x1111111111111111111111111111111111111111111111111111111111111111
-    # Get paper details by docId (assuming the registration was ID 1)
+    # Get paper details by docId (assuming the registration was ID 1), including retraction status
     cast call <CONTRACT_ADDR> "getPaper(uint256)" 1
     # Get docId by TAD (for the registration example)
     cast call <CONTRACT_ADDR> "getDocIdByTAD(bytes32)" 0x2222222222222222222222222222222222222222222222222222222222222222
