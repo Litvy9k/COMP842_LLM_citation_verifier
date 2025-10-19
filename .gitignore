@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
@@ -21,3 +22,33 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+=======
+# Python cache
+__pycache__/
+*.pyc
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Virtual environments
+venv/
+.env
+
+# Logs
+*.log
+
+# Data files (optional – ignore big test data)
+*.csv
+*.json
+*.txt
+
+# OS/IDE files
+.DS_Store
+.vscode/
+.idea/
+add .gitignore to omit unwanted files
+
+# Model and environment directories
+mistral-env/
+model/
+>>>>>>> a4a2dd802e8d2897315f83986b7cfb3bcbb412c0
