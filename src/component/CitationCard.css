@@ -1,0 +1,66 @@
+.citation-card {
+  background-color: #e6f0ff;
+  border-radius: 8px;
+  padding: 20px 30px;
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  margin-top: 20px;
+}
+
+.citation-card h3 {
+  background-color: #074587;
+  color: white;
+  padding: 12px 15px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.citation-field {
+  display: flex;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.citation-field label {
+  width: 120px;
+  font-weight: 500;
+  color: #003366;
+}
+
+.citation-field input,
+.citation-field select {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1px solid #99c2ff;
+  background-color: white;
+  font-size: 16px;
+  outline: none;
+}
+
+.citation-field input:focus,
+.citation-field select:focus {
+  border-color: #3399ff;
+}
+
+.citation-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 15px;
+}
+
+.citation-buttons button {
+  background-color: #074587;
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+}
+
+.citation-buttons button:hover {
+  background-color: #0056b3;
+}
