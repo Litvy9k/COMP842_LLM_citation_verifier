@@ -28,12 +28,9 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center">
-      {/* Navbar at the top */}
+    <div className="nav">
       <Navbar setActivePage={setActivePage} />
-
-      {/* Page container: content in middle, responsive width */}
-      <div className="page-container p-6">
+      <div className="page-container">
         {renderPage()}
       </div>
     </div>
