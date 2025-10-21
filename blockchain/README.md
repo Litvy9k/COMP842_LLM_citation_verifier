@@ -76,95 +76,189 @@ Four bytes32 values, in this order:
 
 ### How to Test the Smart Contract (Direct Interaction)
 
-1.  **Install Foundry (once)**
+1.  **Install Node.js and npm (once)**
     ```bash
-    curl -L https://foundry.paradigm.xyz | bash
-    source ~/.bashrc  # or ~/.zshrc, depending on your shell
-    foundryup
+    # Visit: https://nodejs.org/ to download and install
+    # npm is included with Node.js installation
     ```
 
-2.  **Initialize Foundry project in the blockchain folder**
+2.  **Initialize Hardhat project in the blockchain folder**
     ```bash
-    forge init
+    npm init -y
+    npm install --save-dev hardhat @nomicfoundation/hardhat-toolbox
+    npm install @openzeppelin/contracts
     ```
 
-3.  **Ensure your contract is at: `blockchain/src/CitationRegistry.sol`**
+3.  **Ensure your contract is at: `blockchain/contracts/CitationRegistry.sol`**
 
-4.  **Install OpenZeppelin dependencies in the blockchain folder**
+4.  **Start local Ethereum node**
     ```bash
-    forge install OpenZeppelin/openzeppelin-contracts
+    npx hardhat node
     ```
+    *Note: Take note of the accounts and private keys printed by `hardhat node`. The first account (`0xf39...`) will be the deployer and initial admin. The second account (`0x709...`) will be used as an example for adding a new admin.*
 
-5.  **Start local Ethereum node**
+5.  **Deploy the contract**
     ```bash
-    anvil
+    npx hardhat run scripts/deploy.js --network localhost
     ```
-    *Note: Take note of the accounts and private keys printed by `anvil`. The first account (`0xf39...`) will be the deployer and initial admin. The second account (`0x709...`) will be used as an example for adding a new admin.*
+    *This command deploys the contract and grants the `REGISTRAR_ROLE` to the deployer's address (`0xf39...`). The deployer automatically receives the `DEFAULT_ADMIN_ROLE`. The `contractAddress` will be printed in the output.*
 
-6.  **Deploy the contract**
-    *   This command deploys the contract and grants the `REGISTRAR_ROLE` to the deployer's address (`0xf39...`). The deployer automatically receives the `DEFAULT_ADMIN_ROLE`.
-    ```bash
-    # ABI-encode the constructor argument (initialRegistrar address)
-    ENCODED_ARGS=$(cast abi-encode "function(address)" <ADMIN_ADDRESS>)
-    # Deploy the contract
-    cast send --rpc-url http://127.0.0.1:8545 \
-      --private-key <ADMIN_PRIVATE_KEY> \
-      --create $(forge inspect CitationRegistry bytecode) \
-      $ENCODED_ARGS
-    ```
-    *Replace the address and private key if you intend to use a different `anvil` account for the initial admin and deployment. The `contractAddress` printed in the output is your deployed contract address.*
-
-7.  **Register a paper directly (replace `<CONTRACT_ADDR>` with the address printed in step 6)**
+6.  **Register a paper directly (replace `<CONTRACT_ADDR>` with the address printed in step 5)**
     *   The four test hashes correspond to:
         *   `hashedDoi`
         *   `hashedTAD`
         *   `metadataRoot`
         *   `fullTextRoot`
-    ```bash
-    cast send <CONTRACT_ADDR> "registerPaper(bytes32,bytes32,bytes32,bytes32)" \
-      0x1111111111111111111111111111111111111111111111111111111111111111 \
-      0x2222222222222222222222222222222222222222222222222222222222222222 \
-      0x3333333333333333333333333333333333333333333333333333333333333333 \
-      0x4444444444444444444444444444444444444444444444444444444444444444 \
-      --rpc-url http://127.0.0.1:8545 \
-      --private-key <ADMIN_PRIVATE_KEY>
+
+    Create a test script `scripts/register_paper.js`:
+    ```javascript
+    const { ethers } = require("hardhat");
+
+    async function main() {
+      const contractAddress = "<CONTRACT_ADDR>";
+      const [deployer] = await ethers.getSigners();
+
+      const CitationRegistry = await ethers.getContractFactory("CitationRegistry");
+      const contract = CitationRegistry.attach(contractAddress);
+
+      const tx = await contract.registerPaper(
+        "0x1111111111111111111111111111111111111111111111111111111111111111", // hashedDoi
+        "0x2222222222222222222222222222222222222222222222222222222222222222", // hashedTAD
+        "0x3333333333333333333333333333333333333333333333333333333333333333", // metadataRoot
+        "0x4444444444444444444444444444444444444444444444444444444444444444"  // fullTextRoot
+      );
+
+      await tx.wait();
+      console.log("Paper registered with docId: 1");
+    }
+
+    main().catch(console.error);
     ```
 
-8.  **Grant `REGISTRAR_ROLE` to another admin (using `cast` after deployment)**
-    *   Replace `<CONTRACT_ADDR>` with the address printed in step 6.
-    *   Replace the private key in the command below with the private key of the *deployer* (who holds `DEFAULT_ADMIN_ROLE`).
-    *   Replace `<NEW_ADMIN_ADDRESS>` with the address of the admin you want to add.
+    Then run:
     ```bash
-    cast send <CONTRACT_ADDR> "grantRegistrarRole(address)" <NEW_ADMIN_ADDRESS> \
-      --rpc-url http://127.0.0.1:8545 \
-      --private-key <ADMIN_PRIVATE_KEY>
+    npx hardhat run scripts/register_paper.js --network localhost
     ```
 
-9.  **Revoke `REGISTRAR_ROLE` from an admin (using `cast` after deployment)**
-    *   Replace `<CONTRACT_ADDR>` with the address printed in step 6.
-    *   Replace the private key in the command below with the private key of the *deployer* (who holds `DEFAULT_ADMIN_ROLE`).
+7.  **Grant `REGISTRAR_ROLE` to another admin (using a custom script after deployment)**
+    *   Replace `<CONTRACT_ADDR>` with the address printed in step 5.
+    *   Replace `<NEW_ADMIN_ADDRESS>` with the address of the admin you want to add (e.g., `0x70997970C51812dc3A010C7d01b50e0d17dc79C8`).
+
+    Create a test script `scripts/grant_role.js`:
+    ```javascript
+    const { ethers } = require("hardhat");
+
+    async function main() {
+      const contractAddress = "<CONTRACT_ADDR>";
+      const [deployer] = await ethers.getSigners();
+
+      const CitationRegistry = await ethers.getContractFactory("CitationRegistry");
+      const contract = CitationRegistry.attach(contractAddress);
+
+      const tx = await contract.grantRegistrarRole("<NEW_ADMIN_ADDRESS>");
+      await tx.wait();
+
+      console.log("REGISTRAR_ROLE granted to:", "<NEW_ADMIN_ADDRESS>");
+    }
+
+    main().catch(console.error);
+    ```
+
+    Then run:
+    ```bash
+    npx hardhat run scripts/grant_role.js --network localhost
+    ```
+
+8.  **Revoke `REGISTRAR_ROLE` from an admin (using a custom script after deployment)**
+    *   Replace `<CONTRACT_ADDR>` with the address printed in step 5.
     *   Replace `<ADMIN_TO_REVOKE>` with the address of the admin you want to remove.
-    ```bash
-    cast send <CONTRACT_ADDR> "revokeRegistrarRole(address)" <ADMIN_TO_REVOKE> \
-      --rpc-url http://127.0.0.1:8545 \
-      --private-key <ADMIN_PRIVATE_KEY>
+
+    Create a test script `scripts/revoke_role.js`:
+    ```javascript
+    const { ethers } = require("hardhat");
+
+    async function main() {
+      const contractAddress = "<CONTRACT_ADDR>";
+      const [deployer] = await ethers.getSigners();
+
+      const CitationRegistry = await ethers.getContractFactory("CitationRegistry");
+      const contract = CitationRegistry.attach(contractAddress);
+
+      const tx = await contract.revokeRegistrarRole("<ADMIN_TO_REVOKE>");
+      await tx.wait();
+
+      console.log("REGISTRAR_ROLE revoked from:", "<ADMIN_TO_REVOKE>");
+    }
+
+    main().catch(console.error);
     ```
 
-10. **Retract a paper (replace `<CONTRACT_ADDR>` with the address printed in step 6)**
-    *   Replace `<DOC_ID_TO_RETRACT>` with the `docId` of the paper you want to retract.
-    *   Replace the private key in the command below with the private key of an *admin* holding `REGISTRAR_ROLE`.
+    Then run:
     ```bash
-    cast send <CONTRACT_ADDR> "retractPaper(uint256)" <DOC_ID_TO_RETRACT> \
-      --rpc-url http://127.0.0.1:8545 \
-      --private-key <ADMIN_PRIVATE_KEY>
+    npx hardhat run scripts/revoke_role.js --network localhost
     ```
 
-11. **Test lookup**
+9.  **Retract a paper (replace `<CONTRACT_ADDR>` with the address printed in step 5)**
+    *   Replace `<DOC_ID_TO_RETRACT>` with the `docId` of the paper you want to retract (e.g., `1`).
+
+    Create a test script `scripts/retract_paper.js`:
+    ```javascript
+    const { ethers } = require("hardhat");
+
+    async function main() {
+      const contractAddress = "<CONTRACT_ADDR>";
+      const [deployer] = await ethers.getSigners();
+
+      const CitationRegistry = await ethers.getContractFactory("CitationRegistry");
+      const contract = CitationRegistry.attach(contractAddress);
+
+      const tx = await contract.retractPaper(<DOC_ID_TO_RETRACT>);
+      await tx.wait();
+
+      console.log("Paper retracted with docId:", <DOC_ID_TO_RETRACT>);
+    }
+
+    main().catch(console.error);
+    ```
+
+    Then run:
     ```bash
-    # Get docId by DOI (for the registration example)
-    cast call <CONTRACT_ADDR> "getDocIdByDoi(bytes32)" 0x1111111111111111111111111111111111111111111111111111111111111111
-    # Get paper details by docId (assuming the registration was ID 1), including retraction status
-    cast call <CONTRACT_ADDR> "getPaper(uint256)" 1
-    # Get docId by TAD (for the registration example)
-    cast call <CONTRACT_ADDR> "getDocIdByTAD(bytes32)" 0x2222222222222222222222222222222222222222222222222222222222222222
+    npx hardhat run scripts/retract_paper.js --network localhost
+    ```
+
+10. **Test lookup**
+    *   Create a test script `scripts/test_lookup.js`:
+    ```javascript
+    const { ethers } = require("hardhat");
+
+    async function main() {
+      const contractAddress = "<CONTRACT_ADDR>";
+      const [deployer] = await ethers.getSigners();
+
+      const CitationRegistry = await ethers.getContractFactory("CitationRegistry");
+      const contract = CitationRegistry.attach(contractAddress);
+
+      // Get docId by DOI
+      const docIdByDoi = await contract.getDocIdByDoi("0x1111111111111111111111111111111111111111111111111111111111111111");
+      console.log("docId by DOI:", docIdByDoi.toString());
+
+      // Get paper details by docId
+      const paper = await contract.getPaper(1);
+      console.log("Paper details:", {
+        metadataRoot: paper.metadataRoot,
+        fullTextRoot: paper.fullTextRoot,
+        isRetracted: paper.isRetracted
+      });
+
+      // Get docId by TAD
+      const docIdByTAD = await contract.getDocIdByTAD("0x2222222222222222222222222222222222222222222222222222222222222222");
+      console.log("docId by TAD:", docIdByTAD.toString());
+    }
+
+    main().catch(console.error);
+    ```
+
+    Then run:
+    ```bash
+    npx hardhat run scripts/test_lookup.js --network localhost
     ```

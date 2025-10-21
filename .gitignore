@@ -15,7 +15,7 @@ venv/
 # Data files (optional – ignore big test data)
 *.csv
 *.json
-*.txt
+# *.txt
 
 # OS/IDE files
 .DS_Store

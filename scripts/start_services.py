@@ -92,11 +92,24 @@ class ServiceManager:
                 print()
                 return False
 
+        # Check for Node.js and npm (required for Hardhat)
+        if not self.check_command("node"):
+            print("ERROR: Node.js not found")
+            print("Please install Node.js first:")
+            print("  Visit: https://nodejs.org/")
+            print()
+            return False
 
-        if not self.check_command("forge"):
-            print("ERROR: Foundry not found")
-            print("Please install Foundry first:")
-            print("  Visit: https://getfoundry.sh/")
+        if not self.check_command("npm"):
+            print("ERROR: npm not found")
+            print("Please install npm (comes with Node.js)")
+            print()
+            return False
+
+        # Check for Hardhat
+        if not self.check_command("npx"):
+            print("ERROR: npx not found")
+            print("Please ensure Node.js is installed correctly")
             print()
             return False
 
@@ -136,28 +149,55 @@ class ServiceManager:
 
         os.chdir(self.blockchain_dir)
 
-        if not (self.blockchain_dir / "foundry.toml").exists():
-            print("Initializing Foundry project...")
-            cmd = ["forge", "init", "--force"]
+        # Check if package.json exists, if not initialize Hardhat project
+        if not (self.blockchain_dir / "package.json").exists():
+            print("Initializing Hardhat project...")
+            cmd = ["npm", "init", "-y"]
             result = self.run_command(cmd, cwd=self.blockchain_dir)
             if result.returncode != 0:
-                print("Failed to initialize Foundry project")
+                print("Failed to initialize npm project")
                 return False
+
+            # Install Hardhat and dependencies
+            print("Installing Hardhat and dependencies...")
+            install_cmd = [
+                "npm", "install", "--save-dev",
+                "hardhat@^2.19.0",
+                "@nomicfoundation/hardhat-toolbox@^4.0.0"
+            ]
+            result = self.run_command(install_cmd, cwd=self.blockchain_dir)
+            if result.returncode != 0:
+                print("Failed to install Hardhat dependencies")
+                return False
+
+            # Install OpenZeppelin contracts
+            print("Installing OpenZeppelin contracts...")
+            oz_cmd = ["npm", "install", "@openzeppelin/contracts@^5.0.0"]
+            result = self.run_command(oz_cmd, cwd=self.blockchain_dir)
+            if result.returncode != 0:
+                print("Warning: Failed to install OpenZeppelin contracts")
             print()
         else:
-            print("Foundry project already initialized")
+            print("Hardhat project already initialized")
             print()
 
-        print("Installing OpenZeppelin contracts...")
-        cmd = ["forge", "install", "OpenZeppelin/openzeppelin-contracts"]
-        result = self.run_command(cmd, cwd=self.blockchain_dir)
-        if result.returncode != 0:
-            print("Warning: Failed to install OpenZeppelin contracts")
-        print()
+        # Ensure contracts directory exists
+        contracts_dir = self.blockchain_dir / "contracts"
+        if not contracts_dir.exists():
+            contracts_dir.mkdir(exist_ok=True)
+            print("Created contracts directory")
 
-        contract_path = self.blockchain_dir / "src" / "CitationRegistry.sol"
-        if not contract_path.exists():
-            print("ERROR: CitationRegistry.sol not found in blockchain/src/")
+        # Check if CitationRegistry.sol exists in contracts folder
+        contract_path = contracts_dir / "CitationRegistry.sol"
+        src_contract_path = self.blockchain_dir / "src" / "CitationRegistry.sol"
+
+        if src_contract_path.exists() and not contract_path.exists():
+            # Move contract from src to contracts
+            import shutil
+            shutil.move(str(src_contract_path), str(contract_path))
+            print(f"Moved CitationRegistry.sol from src/ to contracts/")
+        elif not contract_path.exists():
+            print("ERROR: CitationRegistry.sol not found")
             print("Please ensure the smart contract file is present")
             print()
             return False
@@ -166,17 +206,17 @@ class ServiceManager:
         print()
         return True
 
-    def start_anvil(self) -> bool:
-        """Start local Ethereum node with Anvil"""
-        print("Starting Anvil local Ethereum node...")
+    def start_hardhat_node(self) -> bool:
+        """Start local Ethereum node with Hardhat"""
+        print("Starting Hardhat local Ethereum node...")
         print()
 
         os.chdir(self.blockchain_dir)
 
         try:
-            print("Running: anvil --host 127.0.0.1 --port 8545")
+            print("Running: npx hardhat node")
             process = subprocess.Popen(
-                ["anvil", "--host", "127.0.0.1", "--port", "8545"],
+                ["npx", "hardhat", "node"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True
@@ -186,21 +226,21 @@ class ServiceManager:
             time.sleep(5)
             if process.poll() is not None:
                 stdout, _ = process.communicate()
-                print(f"Anvil process died: {stdout}")
+                print(f"Hardhat node process died: {stdout}")
                 print()
                 return False
 
-            self.processes["anvil"] = process
-            print("Anvil started successfully on http://127.0.0.1:8545")
+            self.processes["hardhat"] = process
+            print("Hardhat node started successfully on http://127.0.0.1:8545")
             print()
             return True
 
         except FileNotFoundError:
-            print("ERROR: anvil command not found. Please ensure Foundry is installed correctly")
+            print("ERROR: npx hardhat node command not found. Please ensure Hardhat is installed correctly")
             print()
             return False
         except Exception as e:
-            print(f"Error starting Anvil: {e}")
+            print(f"Error starting Hardhat node: {e}")
             print()
             return False
 
@@ -213,141 +253,63 @@ class ServiceManager:
         os.chdir(self.blockchain_dir)
 
         try:
-            print("Getting contract bytecode...")
-            print()
-            cmd = ["forge", "inspect", "CitationRegistry", "bytecode"]
-            result = self.run_command(cmd, cwd=self.blockchain_dir)
+            # Set environment variables for deployment script
+            env = os.environ.copy()
+            env["INITIAL_REGISTRAR"] = pk_data["address"]
+
+            print("Compiling contracts...")
+            compile_cmd = ["npx", "hardhat", "compile"]
+            result = self.run_command(compile_cmd, cwd=self.blockchain_dir, env=env)
             if result.returncode != 0:
-                print("Failed to get contract bytecode")
+                print("Failed to compile contracts")
                 print()
                 return None
 
-            bytecode = result.stdout.strip() if result.stdout else ""
-            if not bytecode:
-                print("ERROR: Contract bytecode is empty")
-                print()
-                return None
-
-            print()
-            admin_address = pk_data["address"]
-            print(f"Encoding constructor args for address: {admin_address}")
-            print()
-
-            # Encode constructor arguments directly in Python instead of using shell command
-            try:
-                # Remove 0x prefix if present and convert to bytes
-                addr_hex = admin_address.replace('0x', '')
-                addr_bytes = bytes.fromhex(addr_hex)
-                # Pad to 20 bytes (Ethereum address size)
-                addr_bytes = addr_bytes.rjust(20, b'\0')
-                # Encode as constructor argument (32-byte slot)
-                encoded_args = encode_hex(addr_bytes.rjust(32, b'\0'))
-                print(f"Encoded constructor args: {encoded_args}")
-            except Exception as e:
-                print(f"Failed to encode constructor args: {e}")
-                print()
-                return None
-
-            print()
-            print(f"Deploying contract with admin: {admin_address}")
-            deploy_cmd = [
-                "cast", "send",
-                "--rpc-url", "http://127.0.0.1:8545",
-                "--private-key", pk_data["private_key"],
-                "--create", bytecode,
-                encoded_args
-            ]
-
-            print()
-            result = subprocess.run(deploy_cmd, capture_output=True, text=True)
-
+            print("Deploying contract...")
+            deploy_cmd = ["npx", "hardhat", "run", "scripts/deploy.js", "--network", "localhost"]
+            result = self.run_command(deploy_cmd, cwd=self.blockchain_dir, env=env)
             if result.returncode != 0:
-                print("Failed to deploy contract:")
-                print(f"    STDOUT: {result.stdout}")
-                print(f"    STDERR: {result.stderr}")
+                print("Failed to deploy contract")
                 print()
                 return None
 
-            output = result.stdout
-            print("Deployment output:")
-            print(f"    {output}")
-            print()
+            # Read deployment info from the deployment.json file created by the deploy script
+            deployment_file = self.blockchain_dir / "deployment.json"
+            if deployment_file.exists():
+                with open(deployment_file, 'r') as f:
+                    deployment_info = json.load(f)
 
-            import re
-            # Extract transaction hash from deployment output for robust address extraction
-            tx_hash_match = re.search(r'transactionHash\s+(0x[a-fA-F0-9]{64})', output, re.IGNORECASE)
-            if tx_hash_match:
-                tx_hash = tx_hash_match.group(1)
-                print(f"Transaction hash: {tx_hash}")
-                print("Getting transaction receipt...")
-                
-                # Get structured receipt using transaction hash
-                receipt_cmd = ["cast", "receipt", tx_hash, "--json", "--rpc-url", "http://127.0.0.1:8545"]
-                receipt_result = subprocess.run(receipt_cmd, capture_output=True, text=True)
-                
-                if receipt_result.returncode == 0:
-                    try:
-                        receipt = json.loads(receipt_result.stdout)
-                        contract_address = receipt.get("contractAddress")
-                        
-                        if contract_address:
-                            print(f"Contract deployed at: {contract_address}")
-                            
-                            # Verify contract was actually deployed by checking code size
-                            verify_cmd = ["cast", "codesize", contract_address, "--rpc-url", "http://127.0.0.1:8545"]
-                            verify_result = subprocess.run(verify_cmd, capture_output=True, text=True)
+                contract_address = deployment_info.get("contractAddress")
+                if contract_address:
+                    print(f"Contract deployed at: {contract_address}")
 
-                            if verify_result.returncode == 0 and verify_result.stdout.strip() != "0":
-                                print(f"Contract code size: {verify_result.stdout.strip()} bytes - Deployment verified")
-                                print()
-                                self.save_config({"CONTRACT_ADDRESS": contract_address})
-                                return contract_address
-                            else:
-                                print("ERROR: Contract deployment failed - no code found at address")
-                                print(f"    Verification stdout: {verify_result.stdout}")
-                                print(f"    Verification stderr: {verify_result.stderr}")
-                                print()
-                                return None
-                        else:
-                            print("ERROR: No contract address found in transaction receipt")
-                            print()
-                            return None
-                            
-                    except json.JSONDecodeError as e:
-                        print(f"ERROR: Failed to parse transaction receipt JSON: {e}")
-                        print(f"    Receipt output: {receipt_result.stdout}")
-                        print()
-                        return None
-                else:
-                    print(f"ERROR: Failed to get transaction receipt: {receipt_result.stderr}")
-                    print()
-                    return None
-            else:
-                print("Could not extract transaction hash from deployment output")
-                print("Attempting fallback regex extraction...")
-                # Fallback to regex method
-                address_match = re.search(r'contractAddress\s+(0x[a-fA-F0-9]{40})', output, re.IGNORECASE)
-                if address_match:
-                    contract_address = address_match.group(1)
-                    print(f"Contract deployed at (fallback): {contract_address}")
-                    
                     # Verify contract was actually deployed by checking code size
                     verify_cmd = ["cast", "codesize", contract_address, "--rpc-url", "http://127.0.0.1:8545"]
-                    verify_result = subprocess.run(verify_cmd, capture_output=True, text=True)
-
-                    if verify_result.returncode == 0 and verify_result.stdout.strip() != "0":
-                        print(f"Contract code size: {verify_result.stdout.strip()} bytes - Deployment verified")
+                    try:
+                        verify_result = subprocess.run(verify_cmd, capture_output=True, text=True)
+                        if verify_result.returncode == 0 and verify_result.stdout.strip() != "0":
+                            print(f"Contract code size: {verify_result.stdout.strip()} bytes - Deployment verified")
+                            print()
+                            self.save_config({"CONTRACT_ADDRESS": contract_address})
+                            return contract_address
+                        else:
+                            print("ERROR: Contract deployment failed - no code found at address")
+                            print()
+                            return None
+                    except FileNotFoundError:
+                        # If cast is not available, trust the deployment script
+                        print("Contract deployment verification skipped (cast not available)")
                         print()
                         self.save_config({"CONTRACT_ADDRESS": contract_address})
                         return contract_address
-                    else:
-                        print("ERROR: Contract deployment failed - no code found at address")
-                        print()
-                        return None
                 else:
-                    print("Could not extract contract address from deployment output")
+                    print("ERROR: No contract address found in deployment info")
                     print()
                     return None
+            else:
+                print("ERROR: Deployment info file not found")
+                print()
+                return None
 
         except Exception as e:
             print(f"Error deploying contract: {e}")
@@ -382,6 +344,20 @@ class ServiceManager:
 
             # Set the private key for backend to use
             env["ETH_PRIVATE_KEY"] = pk_data["private_key"]
+            # Make sure contract address is available in environment
+            if not env.get("CONTRACT_ADDRESS"):
+                if self.config_file.exists():
+                    with open(self.config_file, 'r') as f:
+                        for line in f:
+                            line = line.strip()
+                            if line.startswith('CONTRACT_ADDRESS='):
+                                env["CONTRACT_ADDRESS"] = line.split('=', 1)[1]
+                                break
+
+            # Set correct ABI path for contract
+            abi_path = self.blockchain_dir / "artifacts" / "contracts" / "CitationRegistry.sol" / "CitationRegistry.json"
+            if abi_path.exists():
+                env["CONTRACT_ABI_PATH"] = str(abi_path)
 
             print()
             print("Starting backend server...")
@@ -392,8 +368,10 @@ class ServiceManager:
                 [sys.executable, "run_backend.py"],
                 env=env,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
             )
 
             self.processes["backend"] = process
@@ -433,8 +411,8 @@ class ServiceManager:
             for i in range(15):
                 try:
                     import requests
-                    response = requests.get("http://127.0.0.1:8000/health", timeout=5)
-                    if response.status_code == 200:
+                    response = requests.get("http://127.0.0.1:8000/", timeout=5)
+                    if response.status_code == 200 and response.json().get("ok"):
                         print("Backend is responding")
                         print()
                         break
@@ -443,21 +421,31 @@ class ServiceManager:
                     time.sleep(2)
             else:
                 print("ERROR: Backend failed to start responding")
-                print()
-                return False
+                try:
+                    while True:
+                        time.sleep(1)
+                except KeyboardInterrupt:
+                    return False
 
             success_count = 0
+            processed_dois = set()
+
             for i, paper in enumerate(papers, 1):
+
                 # Validate required fields first
                 if not paper.get('title'):
-                    print(f"Skipping paper {i}/{len(papers)}: Missing title")
                     continue
-                    
+
                 if not paper.get('doi'):
-                    print(f"Skipping paper {i}/{len(papers)}: '{paper['title'][:50]}...' - Missing DOI")
                     continue
-                
-                print(f"Registering paper {i}/{len(papers)}: {paper['title'][:50]}...")
+
+                # Skip duplicate DOIs
+                if paper['doi'] in processed_dois:
+                    continue
+
+                processed_dois.add(paper['doi'])
+
+                print(f"Registering paper: {paper['title'][:50]}...")
 
                 # Generate proper signature for authentication
                 message = f"Register paper: {paper['doi']}"
@@ -495,7 +483,7 @@ class ServiceManager:
                     response = requests.post(
                         "http://127.0.0.1:8000/register",
                         json=paper_data,
-                        timeout=30
+                        timeout=5
                     )
 
                     if response.status_code == 200:
@@ -506,6 +494,9 @@ class ServiceManager:
                         if response.status_code != 404:
                             print(f"       Response: {response.text}")
 
+                except requests.exceptions.Timeout:
+                    print(f"    Request timed out for {paper['doi']}")
+                    continue
                 except requests.exceptions.RequestException as e:
                     print(f"    Request failed for {paper['doi']}: {e}")
                     continue
@@ -513,7 +504,7 @@ class ServiceManager:
                     print(f"    Error processing {paper['doi']}: {e}")
                     continue
 
-            print(f"Paper loading completed: {success_count}/{len(papers)} papers successfully registered")
+            print(f"Added {success_count} papers")
             print()
             return True
 
@@ -589,26 +580,26 @@ class ServiceManager:
             if not self.setup_blockchain():
                 return False
 
-            if not self.start_anvil():
+            if not self.start_hardhat_node():
                 return False
 
-            print("Waiting for Anvil to be fully ready...")
+            print("Waiting for Hardhat node to be fully ready...")
             print()
 
-            # Check if Anvil is actually responding
+            # Check if Hardhat node is actually responding
             for i in range(10):
                 try:
                     import requests
                     response = requests.post("http://127.0.0.1:8545", json={"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}, timeout=5)
                     if response.status_code == 200:
-                        print("Anvil is responding")
+                        print("Hardhat node is responding")
                         print()
                         break
                 except:
-                    print(f"Anvil not ready yet, waiting... ({i+1}/10)")
+                    print(f"Hardhat node not ready yet, waiting... ({i+1}/10)")
                     time.sleep(2)
             else:
-                print("ERROR: Anvil failed to start responding")
+                print("ERROR: Hardhat node failed to start responding")
                 print()
                 return False
 
@@ -634,9 +625,9 @@ class ServiceManager:
             print(f"Admin Address: {pk_data['address']}")
             if contract_address:
                 print(f"Contract Address: {contract_address}")
-            print("Anvil (Ethereum Node): http://127.0.0.1:8545")
+            print("Hardhat Node (Ethereum): http://127.0.0.1:8545")
             print("Backend API: http://127.0.0.1:8000")
-            print("Backend Health Check: http://127.0.0.1:8000/health")
+            print("Backend Health Check: http://127.0.0.1:8000/")
             print("Papers loaded from rag_query/paper.json")
             print("Backend API running on port 8000")
             print("\nPress Ctrl+C to stop all services")
