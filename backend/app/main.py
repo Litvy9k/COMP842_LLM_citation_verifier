@@ -14,6 +14,10 @@ from web3 import Web3
 from eth_account import Account
 from eth_account.messages import encode_defunct
 
+from app.models import RegisterRequest, CompleteValidateRequest, ValidateResponse
+from app.canonical import canonical_json_bytes, hash_hashedDoi, hash_hashedTAD
+from app.merkle_sha256 import build_merkle
+
 # ========== 兼容导入你现有的 app.models，如果缺少类名就用内置后备 ==========
 AuthEnvelope: Any = None
 Metadata: Any = None
@@ -515,3 +519,59 @@ def papers_edit(req: EditRequest):
         "new_fulltext_root": _to_hex32(new_ft_root),
         "recovered_admin": recovered
     }
+    
+@app.post("/validate/complete-metadata", response_model=ValidateResponse)
+def validate_complete(req: CompleteValidateRequest):
+    # 1) 计算同样的哈希/根
+    md = dict(req.metadata or {})
+    doi = md.get("doi")
+    title = md.get("title")
+    authors = md.get("authors") or []
+    date_str = md.get("date")
+    if not doi or not title or not isinstance(authors, list) or date_str is None:
+        raise HTTPException(status_code=400, detail="metadata must include doi, title, authors(list), date(YYYY-MM-DD)")
+
+    hashed_doi = hash_hashedDoi(doi)
+    norm_date = date.fromisoformat(date_str).isoformat()
+    hashed_tad = hash_hashedTAD(title, authors, norm_date)
+
+    meta_leaves = make_metadata_leaves(md)
+    metadata_root, _ = build_merkle(meta_leaves)
+    full_leaves = make_fulltext_leaves(req.full_text, req.chunk_size)
+    fulltext_root, _ = build_merkle(full_leaves) if full_leaves else (b"\x00"*32, [])
+
+    # 2) 在链上查找 docId
+    c = get_contract()
+    try:
+        doc_id = c.functions.getDocIdByDoi(hashed_doi).call()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"getDocIdByDoi failed: {e}")
+    if doc_id == 0:
+        try:
+            doc_id = c.functions.getDocIdByTAD(hashed_tad).call()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"getDocIdByTAD failed: {e}")
+        if doc_id == 0:
+            raise HTTPException(status_code=404, detail="paper not found by DOI or TAD")
+
+    # 3) 读回 roots 对比
+    try:
+        on_metadata_root, on_fulltext_root, _isRetracted = c.functions.getPaper(doc_id).call()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"getPaper failed: {e}")
+
+    ok = (on_metadata_root == metadata_root) and (on_fulltext_root == fulltext_root)
+
+    return ValidateResponse(
+        ok=bool(ok),
+        message="match" if ok else "mismatch",
+        doc_id=doc_id,
+        hashed_doi="0x" + hashed_doi.hex(),
+        hashed_tad="0x" + hashed_tad.hex(),
+        metadata_root="0x" + metadata_root.hex(),
+        fulltext_root="0x" + fulltext_root.hex(),
+        onchain_metadata_root=Web3.to_hex(on_metadata_root),
+        onchain_fulltext_root=Web3.to_hex(on_fulltext_root),
+        details={"checked_fields": ["doi","title","authors","date"]}
+    )
+
