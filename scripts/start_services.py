@@ -79,13 +79,18 @@ class ServiceManager:
         print("Checking dependencies...")
         print()
 
-        if not self.check_command("python3"):
-            print("ERROR: Python 3 is required but not found")
-            print("Please install Python 3 and dependencies first:")
-            print("  pip install -r scripts/startup_requirements.txt")
-            print("  pip install -r scripts/backend_requirements.txt")
-            print()
-            return False
+        # Check for Python - Windows uses 'python', Unix uses 'python3'
+        python_cmd = "python" if platform.system() == "Windows" else "python3"
+        if not self.check_command(python_cmd):
+            # Try the alternative if first fails
+            alt_python_cmd = "python3" if platform.system() == "Windows" else "python"
+            if not self.check_command(alt_python_cmd):
+                print("ERROR: Python 3 is required but not found")
+                print("Please install Python 3 and dependencies first:")
+                print("  pip install -r scripts/startup_requirements.txt")
+                print("  pip install -r scripts/backend_requirements.txt")
+                print()
+                return False
 
 
         if not self.check_command("forge"):
@@ -380,7 +385,8 @@ class ServiceManager:
 
             print()
             print("Starting backend server...")
-            print("Running: python3 run_backend.py")
+            python_name = os.path.basename(sys.executable)
+            print(f"Running: {python_name} run_backend.py")
             print()
             process = subprocess.Popen(
                 [sys.executable, "run_backend.py"],
