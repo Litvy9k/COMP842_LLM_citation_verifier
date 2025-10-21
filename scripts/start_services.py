@@ -343,7 +343,7 @@ class ServiceManager:
                             env[key] = value
 
             # Set the private key for backend to use
-            env["ETH_PRIVATE_KEY"] = pk_data["private_key"]
+            env["PRIVATE_KEY"] = pk_data["private_key"]
             # Make sure contract address is available in environment
             if not env.get("CONTRACT_ADDRESS"):
                 if self.config_file.exists():
