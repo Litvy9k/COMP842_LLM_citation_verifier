@@ -1,0 +1,133 @@
+
+.citation-alter-page {
+  max-width: 600px;
+  margin: 20px auto;
+  padding: 15px;
+  font-family: Arial, sans-serif;
+}
+
+.citation-create-page {
+  max-width: 600px;
+  margin: 20px auto;
+  padding: 15px;
+  font-family: Arial, sans-serif;
+}
+
+.citation-delete-page {
+  max-width: 600px;
+  margin: 20px auto;
+  padding: 15px;
+  font-family: Arial, sans-serif;
+}
+
+.page-title {
+  text-align: center;
+  margin-bottom: 20px;
+  font-size: 28px;
+  color: #074587;
+}
+
+.status-box {
+  background-color: #eef3f8;
+  padding: 10px 15px;
+  margin-bottom: 20px;
+  font-size: 15px;
+  color: #003366;
+}
+
+.citation-search {
+  position: relative;
+  max-width: 600px;
+}
+
+.citation-search label {
+  font-weight: bold;
+  color: #003366;
+}
+
+.citation-search input {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 15px;
+  border: 1px solid #99c2ff;
+  box-sizing: border-box;
+}
+
+.suggestion-dropdown {
+  position: absolute;
+  top: 100%;
+  width: 100%;
+  background-color: white;
+  border: 1px solid #99c2ff;
+  border-top: none;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.suggestion-item {
+  padding: 8px 10px;
+  color: #003366;
+}
+
+.suggestion-item:hover {
+  background-color: #cce0ff;
+}
+
+.popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.popup-content {
+  background-color: #e6f0ff;
+  padding: 25px 30px;
+  max-width: 450px;
+  width: 100%;
+  text-align: center;
+}
+
+.popup-content h3 {
+  background-color: #074587;
+  color: white;
+  padding: 12px 15px;
+  border-radius: 4px;
+  margin-bottom: 15px;
+}
+
+.popup-content p {
+  margin-bottom: 10px;
+  color: #003366;
+  font-size: 14px;
+  text-align: left;
+}
+
+.popup-close-x {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  font-size: 22px;
+}
+
+.popup-close-btn {
+  background-color: #074587;
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  font-weight: bold;
+}
+
+.popup-close-btn:hover {
+  background-color: #005cbf;
+}
+
+.citation-section {
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
