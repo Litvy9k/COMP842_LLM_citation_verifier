@@ -11,6 +11,7 @@ import time
 import signal
 import subprocess
 import platform
+import threading
 from pathlib import Path
 from typing import Optional, Dict, Any
 from eth_account import Account
@@ -25,6 +26,32 @@ class ServiceManager:
         self.processes = {}
         self.config_file = self.base_dir / ".env.local"
         self.pk_file = self.base_dir / ".private_key.json"
+        self.output_threads = {}
+        self.stop_monitoring = threading.Event()
+
+    def monitor_process_output(self, name: str, process: subprocess.Popen):
+        """Monitor and print output from a process with service prefix"""
+        try:
+            while not self.stop_monitoring.is_set() and process.poll() is None:
+                output = process.stdout.readline()
+                if output:
+                    print(f"[{name.upper()}] {output.strip()}")
+                else:
+                    time.sleep(0.1)  # Small delay to prevent busy waiting
+        except Exception as e:
+            print(f"[{name.upper()}] Error monitoring output: {e}")
+
+    def start_output_monitoring(self):
+        """Start monitoring threads for all running processes"""
+        for name, process in self.processes.items():
+            if process.poll() is None:  # Process is still running
+                thread = threading.Thread(
+                    target=self.monitor_process_output,
+                    args=(name, process),
+                    daemon=True
+                )
+                thread.start()
+                self.output_threads[name] = thread
 
     def log(self, message: str):
         """Print log message"""
@@ -522,8 +549,12 @@ class ServiceManager:
         if hasattr(self, '_cleanup_in_progress'):
             return  # Prevent multiple cleanup calls
         self._cleanup_in_progress = True
-        
+
         print("Shutting down services...")
+
+        # Stop output monitoring first
+        self.stop_monitoring.set()
+
         for name, process in list(self.processes.items()):
             if process.poll() is None:
                 print(f"Stopping {name}...")
@@ -543,8 +574,14 @@ class ServiceManager:
                     print(f"  Error stopping {name}: {e}")
             else:
                 print(f"  {name} already stopped")
-        
+
+        # Wait for monitoring threads to finish
+        for name, thread in self.output_threads.items():
+            if thread.is_alive():
+                thread.join(timeout=1)
+
         self.processes.clear()
+        self.output_threads.clear()
         print("Cleanup completed")
 
     def signal_handler(self, signum, frame):
@@ -630,8 +667,12 @@ class ServiceManager:
             print("Backend Health Check: http://127.0.0.1:8000/")
             print("Papers loaded from rag_query/paper.json")
             print("Backend API running on port 8000")
-            print("\nPress Ctrl+C to stop all services")
+            print("\nStarting live output monitoring...")
+            print("Press Ctrl+C to stop all services")
             print("="*60)
+
+            # Start monitoring output from both services
+            self.start_output_monitoring()
 
             while True:
                 time.sleep(1)
