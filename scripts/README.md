@@ -5,9 +5,9 @@ This directory contains startup scripts for the LLM Citation Verifier.
 ## Files
 
 - `start_services.py` - Main startup script that:
-  - Manages private keys (uses Anvil test account as admin)
-  - Sets up Foundry blockchain environment
-  - Starts Anvil local Ethereum node
+  - Manages private keys (uses Hardhat test account as admin)
+  - Sets up Hardhat blockchain environment
+  - Starts Hardhat local Ethereum node
   - Deploys CitationRegistry smart contract
   - Starts backend API server
   - Loads papers from rag_query/paper.json
@@ -26,15 +26,25 @@ pip install -r scripts/startup_requirements.txt
 pip install -r scripts/backend_requirements.txt
 ```
 
-**Foundry (Blockchain Development):**
+**Node.js and npm (Blockchain Development):**
 ```bash
-# Visit https://getfoundry.sh/ and follow installation instructions
+# Visit https://nodejs.org/ to download and install Node.js
+# npm is included with Node.js installation
+
+# Navigate to blockchain directory and install Hardhat dependencies
+cd blockchain
+npm install
+cd ..
 ```
 
 ## Usage
 
 ### Run the Startup Script
 ```bash
+# From the project root directory:
+python3 scripts/start_services.py
+
+# OR from the scripts directory:
 cd scripts
 python3 start_services.py
 ```
@@ -43,14 +53,14 @@ python3 start_services.py
 
 The script performs the following operations:
 
-1. **Dependency Check**: Ensures Python3 and Foundry are installed
+1. **Dependency Check**: Ensures Python3, Node.js, and npm are installed
 2. **Private Key Management**:
-   - Uses Anvil test account as admin account
+   - Uses Hardhat test account as admin account
    - Saves credentials to `.private_key.json` in project root
 3. **Blockchain Setup**:
-   - Initializes Foundry project in `blockchain/` directory
-   - Installs OpenZeppelin contracts
-   - Starts Anvil on http://127.0.0.1:8545
+   - Initializes Hardhat project in `blockchain/` directory
+   - Installs OpenZeppelin contracts via npm
+   - Starts Hardhat node on http://127.0.0.1:8545
    - Deploys CitationRegistry contract with admin role
 4. **Backend Service**:
    - Starts FastAPI backend on http://127.0.0.1:8000
@@ -65,9 +75,9 @@ The script performs the following operations:
 
 After startup, the following services are available:
 
-- **Anvil (Ethereum Node)**: http://127.0.0.1:8545
+- **Hardhat Node (Ethereum)**: http://127.0.0.1:8545
 - **Backend API**: http://127.0.0.1:8000
-- **Backend Health Check**: http://127.0.0.1:8000/health
+- **Backend Health Check**: http://127.0.0.1:8000/
 
 ## Testing
 
@@ -75,10 +85,10 @@ After startup, you can test the services:
 
 ```bash
 # Test backend health
-curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/
 
-# Test contract interaction (retract a paper)
-cast send --rpc-url http://127.0.0.1:8545 --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 <CONTRACT_ADDRESS> "retractPaper(uint256)" <DOC_ID>
+# Test contract interaction using ethers.js or web3.js
+# The contract ABI is available in blockchain/artifacts/contracts/CitationRegistry.sol/CitationRegistry.json
 ```
 
 ## Stopping Services
