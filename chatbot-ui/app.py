@@ -5,7 +5,9 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 Qt = QtCore.Qt
 MAX_BUBBLE_RATIO = 0.68
-API_URL = "http://localhost:8000/rag"
+API_URL = "http://localhost:7654/rag"
+VALIDATE_API_URL = "http://localhost:8000/validate/complete-metadata"
+DEBUG_MODE = "n"
 
 
 class SendTextEdit(QtWidgets.QTextEdit):
@@ -376,7 +378,7 @@ class OverlayPanel(QtWidgets.QFrame):
         w = self.panel.width() if self.panel.width() > 0 else self._expanded_width
         return max(160, int(w * 0.92))
 
-    def add_civi_message(self, text: str):
+    def add_civi_message(self, text: str, state: int = 0):
         row = QtWidgets.QWidget()
         h = QtWidgets.QHBoxLayout(row)
         h.setContentsMargins(6, 6, 6, 6)
@@ -391,6 +393,17 @@ class OverlayPanel(QtWidgets.QFrame):
             QLabel#timestamp { color:#666; font-size:11px; }
         """)
         bubble.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        s_label = QtWidgets.QLabel()
+        
+        if state == 0:
+            s_label.setText("Invalid")
+            s_label.setStyleSheet("color: red;")
+        elif state == 1:
+            s_label.setText("Valid")
+            s_label.setStyleSheet("color: green;")
+        else:
+            s_label.setText("Absence")
+            s_label.setStyleSheet("color: orange;")
 
         v = QtWidgets.QVBoxLayout(bubble)
         v.setContentsMargins(10, 8, 10, 8)
@@ -398,6 +411,7 @@ class OverlayPanel(QtWidgets.QFrame):
 
         txt = AutoHeightTextBrowser()
         txt.setText(text)
+        v.addWidget(s_label)
         v.addWidget(txt)
 
         ts = QtWidgets.QLabel(datetime.now().strftime("%H:%M"))
@@ -531,8 +545,14 @@ class ChatWindow(QtWidgets.QMainWindow):
         self.overlay = OverlayPanel(self.centralWidget(), get_list_rect_in_central, width_expanded=320)
         QtCore.QTimer.singleShot(0, self.overlay.layout_to_target)
         
-    def civi_add_info(self, text: str):
-        self.overlay.add_civi_message(text)
+    def civi_add_info(self, text: str, state: int = 0):
+        self.overlay.add_civi_message(text, state)
+        
+    def _on_debug_changed(self, action: QtGui.QAction):
+        global DEBUG_MODE
+        DEBUG_MODE = action.data()
+        # if hasattr(self, "status_hint"):
+        #     self.status_hint.setText(f"Debug: {DEBUG_MODE}")
 
     def _build_ui(self):
         central = QtWidgets.QWidget()
@@ -612,6 +632,28 @@ class ChatWindow(QtWidgets.QMainWindow):
         act_about = QtGui.QAction("About", self)
         act_about.triggered.connect(self.show_about)
         help_menu.addAction(act_about)
+        
+        help_menu.addSeparator()
+        debug_menu = help_menu.addMenu("Debug")
+
+        group = QtGui.QActionGroup(self)
+        group.setExclusive(True)
+        group.triggered.connect(self._on_debug_changed)
+
+        options = [
+            ("Normal",  "n"),
+            ("Hallucination",    "h"),
+            ("Absence", "a"),
+        ]
+
+        for label, value in options:
+            act = QtGui.QAction(label, self)
+            act.setCheckable(True)
+            act.setData(value)
+            if value == DEBUG_MODE:
+                act.setChecked(True)
+            debug_menu.addAction(act)
+            group.addAction(act)
 
     def on_send_clicked(self):
         text = self.input.toPlainText().strip()
@@ -646,9 +688,38 @@ class ChatWindow(QtWidgets.QMainWindow):
         self.hide_typing_indicator()
         self.bot_reply(text)
         if metadata:
-            self.civi_add_info(self.debug_metadata(metadata))
+            # self.civi_add_info(self.debug_metadata(metadata))
+            self.validate_metadata(metadata)
     
-    def debug_metadata(self, metadata: dict):
+    # def debug_metadata(self, metadata: dict):
+    #     msg = "Cited paper:\nTitle: {}\nauthor: {}\nDOI: {}\nDate: {}\nJournal: {}".format(
+    #         metadata.get("title"),
+    #         metadata.get("author"),
+    #         metadata.get("doi"),
+    #         metadata.get("date"),
+    #         metadata.get("journal"),
+    #     )
+    #     return msg
+    
+    def validate_metadata(self, metadata: dict) -> bool:
+        state = 2
+        if DEBUG_MODE == "h":
+            metadata["author"] = ["Lord Voldemort"]
+        elif DEBUG_MODE == "a":
+            metadata["doi"] = "10.0000/absent.0000"
+        if isinstance(metadata.get("author"), str):
+            metadata["author"] = [a.strip() for a in metadata["author"].split(",") if a.strip()]
+        payload = {"metadata": metadata, "full_text":"" , "chunk_size":4096, "include_retraction": False}
+        resp = requests.post(VALIDATE_API_URL, json=payload)
+        try:
+            if resp.status_code == 200:
+                valid = resp.json().get("matches").get("metadata_root", False)
+                if valid:
+                    state = 1
+                else:
+                    state = 0
+        except:
+            state = 2
         msg = "Cited paper:\nTitle: {}\nauthor: {}\nDOI: {}\nDate: {}\nJournal: {}".format(
             metadata.get("title"),
             metadata.get("author"),
@@ -656,7 +727,8 @@ class ChatWindow(QtWidgets.QMainWindow):
             metadata.get("date"),
             metadata.get("journal"),
         )
-        return msg
+        self.civi_add_info(msg, state)
+        
         
     def on_api_fail(self, msg: str):
         self.hide_typing_indicator()
@@ -744,7 +816,7 @@ class ChatWindow(QtWidgets.QMainWindow):
         self.list_view.updateGeometries()
 
     def resizeEvent(self, event: QtGui.QResizeEvent) -> None:
-        super().resizeEventot(0, self.refresh_bubble_widths)(event)
+        super().resizeEvent(event)
         if hasattr(self, "overlay"):
             self.overlay.layout_to_target()
             self.overlay.refresh_bubble_widths()
