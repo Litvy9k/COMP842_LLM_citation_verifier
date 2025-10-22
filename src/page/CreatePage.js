@@ -10,7 +10,7 @@ const CreatePage = () => {
 
   const [doi, setDoi] = useState("arXiv:1706.03762");
   const [title, setTitle] = useState("Attention Is All You Need");
-  const [authors, setAuthors] = useState("Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, Illia Polosukhin");
+  const [author, setAuthor] = useState("Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, Illia Polosukhin");
   const [date, setDate] = useState("2017-06-12");
   const [abstract, setAbstract] = useState("The dominant sequence transduction models are based on complex recurrent or convolutional neural networks in an encoder-decoder configuration. The best performing models also connect the encoder and decoder through an attention mechanism. We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely. Experiments on two machine translation tasks show these models to be superior in quality while being more parallelizable and requiring significantly less time to train. Our model achieves 28.4 BLEU on the WMT 2014 English-to-German translation task, improving over the existing best results, including ensembles by over 2 BLEU. On the WMT 2014 English-to-French translation task, our model establishes a new single-model state-of-the-art BLEU score of 41.8 after training for 3.5 days on eight GPUs, a small fraction of the training costs of the best models from the literature. We show that the Transformer generalizes well to other tasks by applying it successfully to English constituency parsing both with large and limited training data.");
   const [journal, setJournal] = useState("N/A");
@@ -100,11 +100,11 @@ const CreatePage = () => {
       return;
     }
 
-    const citationData = { doi, title, authors, date, abstract, journal };
+    const citationData = { doi, title, author, date, abstract, journal };
 
     // Validate required fields
-    if (!doi.trim() || !title.trim() || !authors.trim() || !date.trim()) {
-      setStatusMessage("Please fill in all required fields (DOI, Title, Authors, Date).");
+    if (!doi.trim() || !title.trim() || !author.trim() || !date.trim()) {
+      setStatusMessage("Please fill in all required fields (DOI, Title, Author, Date).");
       return;
     }
 
@@ -139,7 +139,7 @@ const CreatePage = () => {
       console.log("CREATE PAGE: Checking TAD existence on blockchain...");
       setStatusMessage("Checking for duplicate Title+Authors+Date combinations...");
 
-      const hashedTadBytes = hashHashedTAD(title, authors, date);
+      const hashedTadBytes = hashHashedTAD(title, author, date);
       const hashedTad = bytesToHex(hashedTadBytes);
       console.log("CREATE PAGE: hashedTAD =", hashedTad);
 
@@ -200,7 +200,7 @@ const CreatePage = () => {
   const handleCancel = () => {
     setDoi("");
     setTitle("");
-    setAuthors("");
+    setAuthor("");
     setDate("");
     setAbstract("");
     setJournal("");
@@ -287,7 +287,7 @@ const CreatePage = () => {
   const fields = [
     { name: "doi", label: "DOI", value: doi, onChange: (e) => { setDoi(e.target.value); clearTransactionDetailsOnFieldChange(); }, placeholder: "10.1109/SUMMA64428.2024.10803746" },
     { name: "title", label: "Title", value: title, onChange: (e) => { setTitle(e.target.value); clearTransactionDetailsOnFieldChange(); }, placeholder: "Utilizing Modern Large Language Models..." },
-    { name: "authors", label: "Authors", value: authors, onChange: (e) => { setAuthors(e.target.value); clearTransactionDetailsOnFieldChange(); }, placeholder: "Andrei Lazarev, Dmitrii Sedov" },
+    { name: "author", label: "Author", value: author, onChange: (e) => { setAuthor(e.target.value); clearTransactionDetailsOnFieldChange(); }, placeholder: "Andrei Lazarev, Dmitrii Sedov" },
     { name: "date", label: "Date", type: "date", value: date, onChange: (e) => { setDate(e.target.value); clearTransactionDetailsOnFieldChange(); } },
     { name: "abstract", label: "Abstract", value: abstract, onChange: (e) => { setAbstract(e.target.value); clearTransactionDetailsOnFieldChange(); }, placeholder: "Short summary of the paper..." },
     { name: "journal", label: "Journal", value: journal, onChange: (e) => { setJournal(e.target.value); clearTransactionDetailsOnFieldChange(); }, placeholder: "6th International Conference on Control Systems..." },

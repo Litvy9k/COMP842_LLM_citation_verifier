@@ -26,7 +26,7 @@ export const prepareCitationRegistration = async (citationData, signer) => {
       metadata: {
         doi: citationData.doi,
         title: citationData.title,
-        authors: citationData.authors.split(',').map(author => author.trim()),
+        author: citationData.author.split(',').map(author => author.trim()),
         date: citationData.date,
         abstract: citationData.abstract,
         journal: citationData.journal,
@@ -239,7 +239,7 @@ export const editPaper = async (oldDocId, newCitationData, signer, oldMetadata =
       new_metadata: {
         doi: newCitationData.doi,
         title: newCitationData.title,
-        authors: newCitationData.authors.split(',').map(author => author.trim()),
+        author: newCitationData.author.split(',').map(author => author.trim()),
         date: newCitationData.date,
         abstract: newCitationData.abstract,
         journal: newCitationData.journal,
