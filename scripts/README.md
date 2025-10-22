@@ -1,6 +1,6 @@
 # Scripts Directory
 
-This directory contains startup scripts for the LLM Citation Verifier.
+This directory contains startup scripts for the LLM Citation Verifier web application, blockchain components, and backend services.
 
 ## Files
 
@@ -11,6 +11,7 @@ This directory contains startup scripts for the LLM Citation Verifier.
   - Deploys CitationRegistry smart contract
   - Starts backend API server
   - Loads papers from rag_query/paper.json
+  - Starts frontend development server automatically
 
 - `startup_requirements.txt` - Python dependencies for the startup script (eth-account, requests)
 
@@ -18,34 +19,36 @@ This directory contains startup scripts for the LLM Citation Verifier.
 
 ## Installation
 
-### 1. Install Dependencies
+### Install Dependencies
 
-**Python Dependencies:**
+**Node.js and npm:**
+Visit https://nodejs.org/ to download and install Node.js (npm is included).
+
+**Web Application Dependencies:**
 ```bash
-pip install -r scripts/startup_requirements.txt
-pip install -r scripts/backend_requirements.txt
+# In the project root directory:
+npm install
 ```
 
-**Node.js and npm (Blockchain Development):**
+**Blockchain Dependencies:**
 ```bash
-# Visit https://nodejs.org/ to download and install Node.js
-# npm is included with Node.js installation
-
-# Navigate to blockchain directory and install Hardhat dependencies
-cd blockchain
+# In the blockchain directory:
 npm install
 cd ..
+```
+
+**Python Dependencies:**
+
+```bash
+# In the scripts directory
+pip install -r startup_requirements.txt
+pip install -r backend_requirements.txt
 ```
 
 ## Usage
 
 ### Run the Startup Script
 ```bash
-# From the project root directory:
-python3 scripts/start_services.py
-
-# OR from the scripts directory:
-cd scripts
 python3 start_services.py
 ```
 
@@ -65,32 +68,35 @@ The script performs the following operations:
 4. **Backend Service**:
    - Starts FastAPI backend on http://127.0.0.1:8000
    - Loads all papers from rag_query/paper.json into the contract
+5. **Frontend Service**:
+   - Starts React development server on http://127.0.0.1:3000
 
 ## Configuration Files Created
 
 - `.private_key.json` - Admin account private key and address
 - `.env.local` - Environment variables including CONTRACT_ADDRESS
 
-## Service URLs
+### MetaMask Setup
 
-After startup, the following services are available:
+**Import Test Account**
+- In MetaMask, click on your account icon and select "Import account"
+- Paste this private key: `0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d`
+- This account (0x70997970C51812dc3A010C7d01b50e0d17dc79C8) is granted REGISTRAR_ROLE during deployment
 
-- **Hardhat Node (Ethereum)**: http://127.0.0.1:8545
-- **Backend API**: http://127.0.0.1:8000
-- **Backend Health Check**: http://127.0.0.1:8000/
+**Connect to Web Interface**
+- Open http://127.0.0.1:3000 in your browser
+- The app should connect automatically and detect the local test network
+- If the network is not added automatically, add it manually in MetaMask:
+  - Network Name: Hardhat Local
+  - New RPC URL: http://127.0.0.1:8545
+  - Chain ID: 1337
+  - Currency Symbol: ETH
 
-## Testing
-
-After startup, you can test the services:
-
-```bash
-# Test backend health
-curl http://127.0.0.1:8000/
-
-# Test contract interaction using ethers.js or web3.js
-# The contract ABI is available in blockchain/artifacts/contracts/CitationRegistry.sol/CitationRegistry.json
-```
-
-## Stopping Services
+**Service URLs**
+After startup, these services are available:
+- Hardhat node (Ethereum): http://127.0.0.1:8545
+- Backend API: http://127.0.0.1:8000
+- Backend health: http://127.0.0.1:8000/
+- Web interface (React): http://127.0.0.1:3000
 
 Press `Ctrl+C` to stop all services gracefully.
