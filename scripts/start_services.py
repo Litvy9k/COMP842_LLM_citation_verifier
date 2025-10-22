@@ -12,10 +12,16 @@ import signal
 import subprocess
 import platform
 import threading
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any
 from eth_account import Account
 from eth_utils import encode_hex
+
+def log_with_timestamp(message: str, prefix: str = "INFO"):
+    """Add timestamp to log messages"""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    print(f"[{timestamp}] [{prefix}] {message}")
 
 class ServiceManager:
     def __init__(self):
@@ -35,11 +41,11 @@ class ServiceManager:
             while not self.stop_monitoring.is_set() and process.poll() is None:
                 output = process.stdout.readline()
                 if output:
-                    print(f"[{name.upper()}] {output.strip()}")
+                    log_with_timestamp(output.strip(), name.upper())
                 else:
                     time.sleep(0.1)  # Small delay to prevent busy waiting
         except Exception as e:
-            print(f"[{name.upper()}] Error monitoring output: {e}")
+            log_with_timestamp(f"Error monitoring output: {e}", name.upper())
 
     def start_output_monitoring(self):
         """Start monitoring threads for all running processes"""
@@ -55,7 +61,7 @@ class ServiceManager:
 
     def log(self, message: str):
         """Print log message"""
-        print(f"{message}")
+        log_with_timestamp(message)
         print()
 
     def run_command(self, cmd: list, cwd: Optional[str] = None, env: Optional[Dict[str, str]] = None, show_output: bool = True) -> subprocess.CompletedProcess:
@@ -258,7 +264,7 @@ class ServiceManager:
                 return False
 
             self.processes["hardhat"] = process
-            print("Hardhat node started successfully on http://127.0.0.1:8545")
+            print("Hardhat node started")
             print()
             return True
 
@@ -402,12 +408,49 @@ class ServiceManager:
             )
 
             self.processes["backend"] = process
-            print("Backend API started on http://127.0.0.1:8000")
+            print("Backend API started")
             print()
             return True
 
         except Exception as e:
             print(f"Error starting backend: {e}")
+            print()
+            return False
+
+    def start_frontend(self) -> bool:
+        """Start the frontend development server (React)"""
+        print("\n" + "="*70)
+        self.log("STARTING FRONTEND DEV SERVER")
+        print("="*70)
+
+        # Frontend lives at project root with package.json
+        project_root = self.base_dir
+        if not (project_root / "package.json").exists():
+            print("No package.json found at project root; skipping frontend startup")
+            return True
+
+        try:
+            print()
+            print("Starting frontend server (npm start)...")
+            print("Running: npm start")
+            print()
+            process = subprocess.Popen(
+                ["npm", "start"],
+                cwd=project_root,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
+            )
+
+            self.processes["frontend"] = process
+            print("Frontend dev server started")
+            print()
+            return True
+
+        except Exception as e:
+            print(f"Error starting frontend: {e}")
             print()
             return False
 
@@ -496,7 +539,7 @@ class ServiceManager:
                     "metadata": {
                         "doi": paper["doi"],
                         "title": paper["title"],
-                        "author": paper.get("author", "").split(", ") if isinstance(paper.get("author"), str) else [],
+                        "author": [a.strip() for a in paper.get("author", "").split(", ")] if isinstance(paper.get("author"), str) else paper.get("author", []),
                         "date": paper.get("date", ""),
                         "abstract": paper.get("abstract", ""),
                         "journal": paper.get("journal", "")
@@ -550,30 +593,30 @@ class ServiceManager:
             return  # Prevent multiple cleanup calls
         self._cleanup_in_progress = True
 
-        print("Shutting down services...")
+        log_with_timestamp("Shutting down services...")
 
         # Stop output monitoring first
         self.stop_monitoring.set()
 
         for name, process in list(self.processes.items()):
             if process.poll() is None:
-                print(f"Stopping {name}...")
+                log_with_timestamp(f"Stopping {name}...")
                 try:
                     process.terminate()
                     process.wait(timeout=3)
-                    print(f"  {name} stopped gracefully")
+                    log_with_timestamp(f"  {name} stopped gracefully")
                 except subprocess.TimeoutExpired:
-                    print(f"  Force killing {name}...")
+                    log_with_timestamp(f"  Force killing {name}...")
                     process.kill()
                     try:
                         process.wait(timeout=2)
-                        print(f"  {name} force killed")
+                        log_with_timestamp(f"  {name} force killed")
                     except subprocess.TimeoutExpired:
-                        print(f"  Warning: {name} may still be running")
+                        log_with_timestamp(f"  Warning: {name} may still be running")
                 except Exception as e:
-                    print(f"  Error stopping {name}: {e}")
+                    log_with_timestamp(f"  Error stopping {name}: {e}")
             else:
-                print(f"  {name} already stopped")
+                log_with_timestamp(f"  {name} already stopped")
 
         # Wait for monitoring threads to finish
         for name, thread in self.output_threads.items():
@@ -582,16 +625,16 @@ class ServiceManager:
 
         self.processes.clear()
         self.output_threads.clear()
-        print("Cleanup completed")
+        log_with_timestamp("Cleanup completed")
 
     def signal_handler(self, signum, frame):
         """Handle shutdown signals"""
         if hasattr(self, '_shutdown_in_progress'):
-            print("\nForce exit...")
+            log_with_timestamp("Force exit...")
             os._exit(1)
-        
+
         self._shutdown_in_progress = True
-        print("\nReceived shutdown signal...")
+        log_with_timestamp("Received shutdown signal...")
         print()
         self.cleanup()
         sys.exit(0)
@@ -656,20 +699,34 @@ class ServiceManager:
                 print()
                 return False
 
-            print("\n" + "="*60)
-            print("SERVICES STARTED SUCCESSFULLY!")
-            print("="*60)
+            # Start frontend
+            if not self.start_frontend():
+                print("ERROR: Frontend startup failed. Exiting.")
+                print()
+                return False
+
+            print("\n" + "="*70)
+            print("ALL SERVICES STARTED SUCCESSFULLY!")
+            print("="*70)
             print(f"Admin Address: {pk_data['address']}")
             if contract_address:
                 print(f"Contract Address: {contract_address}")
-            print("Hardhat Node (Ethereum): http://127.0.0.1:8545")
-            print("Backend API: http://127.0.0.1:8000")
-            print("Backend Health Check: http://127.0.0.1:8000/")
-            print("Papers loaded from rag_query/paper.json")
-            print("Backend API running on port 8000")
-            print("\nStarting live output monitoring...")
+            print()
+            print("Service URLs:")
+            print(f"   - Hardhat Node (Ethereum): http://127.0.0.1:8545")
+            print(f"   - Backend API: http://127.0.0.1:8000")
+            print(f"   - Backend Health Check: http://127.0.0.1:8000/")
+            print(f"   - Web Interface (React Dev): http://127.0.0.1:3000")
+            print()
+            print("Papers loaded from rag_query/paper.json into the backend")
+            print("MetaMask Network Configuration:")
+            print("   - RPC URL: http://127.0.0.1:8545")
+            print("   - Chain ID: 1337")
+            print("   - Symbol: ETH")
+            print()
+            print("Starting live output monitoring...")
             print("Press Ctrl+C to stop all services")
-            print("="*60)
+            print("="*70)
 
             # Start monitoring output from both services
             self.start_output_monitoring()

@@ -64,3 +64,26 @@
 .citation-buttons button:hover {
   background-color: #0056b3;
 }
+
+.citation-buttons button.clear-btn {
+  background-color: #6c757d;
+  color: white;
+  opacity: 0.7;
+}
+
+.citation-buttons button.clear-btn:hover {
+  background-color: #5a6268;
+  opacity: 0.8;
+}
+
+.citation-buttons button.disabled {
+  background-color: #cccccc;
+  color: #666666;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.citation-buttons button.disabled:hover {
+  background-color: #cccccc;
+  opacity: 0.6;
+}
