@@ -5,7 +5,7 @@ const defaultPlaceholders = {
   doi: "10.1109/SUMMA64428.2024.10803746",
   title:
     "Utilizing Modern Large Language Models (LLM) for Financial Trend Analysis and Digest Creation",
-  authors: "Andrei Lazarev, Dmitrii Sedov",
+  author: "Andrei Lazarev, Dmitrii Sedov",
   date: "2025-09-22",
   abstract:
     "This paper introduces a framework using LLMs for automated financial digest generation...",

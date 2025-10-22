@@ -3,6 +3,7 @@
  */
 
 import { keccak_256 } from 'js-sha3';
+import sha256 from 'js-sha256';
 
 export function normalizeDoi(doi) {
   if (!doi) {
@@ -66,54 +67,65 @@ export function reducePairs(nodes) {
   return level[0];
 }
 
-export function authorsRoot(authors) {
+export function authorRoot(author) {
   // Build author leaves with NFKC normalization
-  const leaves = (authors || []).map(author => h00(canonStr(String(author))));
+  const authorsArray = Array.isArray(author)
+    ? author.map(a => String(a).trim())
+    : String(author || "").split(',').map(a => a.trim()).filter(a => a);
+  const leaves = authorsArray.map(a => h00(canonStr(String(a))));
   return reducePairs(leaves);
 }
 
-export function hashHashedDoi(doi) {
-  // Leaf hash of lowercased DOI
-  return h00(canonStr(doi, true));
+// Convert object to canonical JSON bytes with sorted keys
+function canonicalJsonBytes(obj) {
+  const jsonString = JSON.stringify(obj, Object.keys(obj).sort(), 0);
+  return new TextEncoder().encode(jsonString);
 }
 
-export function hashHashedTAD(title, authors, dateIso) {
-  // Convert authors to array (accepts comma-separated string or array)
-  const authorsArray = Array.isArray(authors)
-    ? authors.map(a => String(a).trim())
-    : String(authors || "").split(',').map(a => a.trim()).filter(a => a);
+export function hashHashedDoi(doi) {
+  // SHA256 hash of canonical JSON representation of normalized DOI (to match backend)
+  const normalizedDoi = normalizeDoi(doi);
+  const jsonBytes = canonicalJsonBytes(normalizedDoi);
+  return new Uint8Array(sha256.arrayBuffer(jsonBytes));
+}
+
+export function hashHashedTAD(title, author, dateIso) {
+  // Convert author to array (accepts comma-separated string or array)
+  const authorsArray = Array.isArray(author)
+    ? author.map(a => String(a).trim())
+    : String(author || "").split(',').map(a => a.trim()).filter(a => a);
 
   // Compute TAD hash:
   // 1. Hash title with NFKC normalization
   const h_title = h00(canonStr(title || ""));
 
-  // 2. Create Merkle tree of authors
-  const h_auth = authorsRoot(authorsArray);
+  // 2. Create Merkle tree of author
+  const h_auth = authorRoot(authorsArray);
 
-  // 3. Combine title+authors
+  // 3. Combine title+author
   const n_ta = h01(h_title, h_auth);
 
   // 4. Hash date with NFKC normalization
   const h_date = h00(canonStr(dateIso));
 
-  // 5. Final combination: (title+authors) + date
+  // 5. Final combination: (title+author) + date
   return h01(n_ta, h_date);
 }
 
 export function metadataRootFrom(metadata) {
-  const { doi = '', title = '', authors = [], date = '' } = metadata;
+  const { doi = '', title = '', author = [], date = '' } = metadata;
 
-  // Convert authors to array format for consistency
-  const authorsArray = Array.isArray(authors)
-    ? authors.map(a => String(a).trim())
-    : String(authors || "").split(',').map(a => a.trim()).filter(a => a);
+  // Convert author to array format for consistency
+  const authorsArray = Array.isArray(author)
+    ? author.map(a => String(a).trim())
+    : String(author || "").split(',').map(a => a.trim()).filter(a => a);
 
   // Compute metadata root:
   // h_title = _h00(_canon_str(title))
   const h_title = h00(canonStr(title));
   
-  // h_auth = _authors_root(authors)
-  const h_auth = authorsRoot(authorsArray);
+  // h_auth = _author_root(author)
+  const h_auth = authorRoot(authorsArray);
   
   // n_ta = _h01(h_title, h_auth)
   const n_ta = h01(h_title, h_auth);
@@ -162,23 +174,23 @@ export async function generateAuthSignature(doi, signer) {
 }
 
 export function calculateValidationHashes(citation) {
-  const { doi, title, authors, date, abstract, journal } = citation;
+  const { doi, title, author, date, abstract, journal } = citation;
 
   // Validate required fields
-  if (!doi?.trim() || !title?.trim() || !authors?.trim() || !date?.trim()) {
-    throw new Error('Please fill in all required fields (DOI, Title, Authors, Date).');
+  if (!doi?.trim() || !title?.trim() || !author?.trim() || !date?.trim()) {
+    throw new Error('Please fill in all required fields (DOI, Title, Author, Date).');
   }
 
-  // Parse authors (handle both string and array)
-  const authorsArray = Array.isArray(authors)
-    ? authors
-    : authors.split(',').map(a => a.trim()).filter(a => a);
+  // Parse author (handle both string and array)
+  const authorsArray = Array.isArray(author)
+    ? author
+    : author.split(',').map(a => a.trim()).filter(a => a);
 
   // Calculate hashes only - no signature
   const hashedDoi = hashHashedDoi(doi);
   const hashedTad = hashHashedTAD(title, authorsArray, date);
   const metadataRoot = metadataRootFrom({
-    doi, title, authors: authorsArray, date, abstract, journal
+    doi, title, author: authorsArray, date, abstract, journal
   });
   const fulltextRoot = fulltextRootFrom('', 1024); // No full text for manual registration
 
@@ -191,23 +203,23 @@ export function calculateValidationHashes(citation) {
 }
 
 export async function calculateRegistrationData(citation, signer) {
-  const { doi, title, authors, date, abstract, journal } = citation;
+  const { doi, title, author, date, abstract, journal } = citation;
 
   // Validate required fields
-  if (!doi?.trim() || !title?.trim() || !authors?.trim() || !date?.trim()) {
-    throw new Error('Please fill in all required fields (DOI, Title, Authors, Date).');
+  if (!doi?.trim() || !title?.trim() || !author?.trim() || !date?.trim()) {
+    throw new Error('Please fill in all required fields (DOI, Title, Author, Date).');
   }
 
-  // Parse authors (handle both string and array)
-  const authorsArray = Array.isArray(authors)
-    ? authors
-    : authors.split(',').map(a => a.trim()).filter(a => a);
+  // Parse author (handle both string and array)
+  const authorsArray = Array.isArray(author)
+    ? author
+    : author.split(',').map(a => a.trim()).filter(a => a);
 
   // Calculate hashes
   const hashedDoi = hashHashedDoi(doi);
   const hashedTad = hashHashedTAD(title, authorsArray, date);
   const metadataRoot = metadataRootFrom({
-    doi, title, authors: authorsArray, date, abstract, journal
+    doi, title, author: authorsArray, date, abstract, journal
   });
   const fulltextRoot = fulltextRootFrom('', 1024); // No full text for manual registration
 
