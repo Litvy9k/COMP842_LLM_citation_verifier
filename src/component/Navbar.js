@@ -9,11 +9,10 @@ const Navbar = ({ setActivePage }) => {
           Citation Verifier
         </div>
         <nav className="navbar-links">
-          <button onClick={() => setActivePage("welcome")}>Welcome</button>
-          <button onClick={() => setActivePage("create")}>Create</button>
-          <button onClick={() => setActivePage("alter")}>Alter</button>
-          <button onClick={() => setActivePage("delete")}>Delete</button>
-          <button onClick={() => setActivePage("login")}>Login</button>
+          <button onClick={() => setActivePage("create")}>Register</button>
+          <button onClick={() => setActivePage("alter")}>Update</button>
+          <button onClick={() => setActivePage("delete")}>Retract</button>
+          <button onClick={() => setActivePage("login")}>Admin</button>
         </nav>
       </div>
     </header>
