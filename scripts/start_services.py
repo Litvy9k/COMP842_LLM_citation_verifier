@@ -502,7 +502,7 @@ class ServiceManager:
                     "metadata": {
                         "doi": paper["doi"],
                         "title": paper["title"],
-                        "author": paper.get("author", "").split(", ").map(a => a.strip()) if isinstance(paper.get("author"), str) else [],
+                        "author": [a.strip() for a in paper.get("author", "").split(", ")] if isinstance(paper.get("author"), str) else [], 
                         "date": paper.get("date", ""),
                         "abstract": paper.get("abstract", ""),
                         "journal": paper.get("journal", "")
