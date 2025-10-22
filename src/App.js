@@ -1,15 +1,15 @@
 import React, { useState } from "react";
 import Navbar from "./component/Navbar";
-import WelcomePage from "./page/WelcomePage";
 import CreatePage from "./page/CreatePage";
 import AlterPage from "./page/AlterPage";
 import DeletePage from "./page/DeletePage";
 import LoginPage from "./page/LoginPage";
+import { WalletProvider } from "./contexts/WalletContext";
 import './App.css';
 
 
 function App() {
-  const [activePage, setActivePage] = useState("welcome");
+  const [activePage, setActivePage] = useState("login");
 
   // Decide which page to render
   const renderPage = () => {
@@ -23,17 +23,19 @@ function App() {
       case "login":
         return <LoginPage />;
       default:
-        return <WelcomePage />;
+        return <LoginPage />;
     }
   };
 
   return (
-    <div className="nav">
-      <Navbar setActivePage={setActivePage} />
-      <div className="page-container">
-        {renderPage()}
+    <WalletProvider>
+      <div className="nav">
+        <Navbar setActivePage={setActivePage} />
+        <div className="page-container">
+          {renderPage()}
+        </div>
       </div>
-    </div>
+    </WalletProvider>
   );
 }
 

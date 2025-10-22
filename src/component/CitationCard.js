@@ -19,8 +19,10 @@ const CitationCard = ({
   buttonText,
   onActionClick,
   extraButtons = [],
+  disabled = false,
+  tooltip = "",
 }) => {
-  const isButtonDisabled = fields.some((f) => !f.value);
+  const isButtonDisabled = disabled || fields.some((f) => !f.value);
 
   return (
     <div className="citation-card">
@@ -51,7 +53,12 @@ const CitationCard = ({
 
       <div className="citation-buttons">
         {buttonText && onActionClick && (
-          <button onClick={onActionClick} disabled={isButtonDisabled}>
+          <button
+            onClick={onActionClick}
+            disabled={isButtonDisabled}
+            title={tooltip}
+            className={isButtonDisabled ? "disabled" : ""}
+          >
             {buttonText}
           </button>
         )}
