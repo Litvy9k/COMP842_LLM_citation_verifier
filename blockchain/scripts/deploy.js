@@ -36,11 +36,29 @@ async function main() {
   console.log("Contract code size:", codeSize.length / 2 - 2, "bytes");
   console.log("Deployment verified successfully");
 
+  // Grant REGISTRAR_ROLE to additional test accounts for web testing
+  console.log("\nGranting REGISTRAR_ROLE to test accounts...");
+  const signers = await ethers.getSigners();
+
+  // Grant REGISTRAR_ROLE to account 1 (0x70997970C51812dc3A010C7d01b50e0d17dc79C8) for web testing
+  if (signers.length > 1) {
+    const testAccount = signers[1];
+    console.log("Granting REGISTRAR_ROLE to test account:", testAccount.address);
+
+    const grantTx = await citationRegistry.grantRegistrarRole(testAccount.address);
+    await grantTx.wait();
+
+    console.log("REGISTRAR_ROLE granted to test account successfully");
+  } else {
+    console.log("Warning: Only one signer available, test account not configured");
+  }
+
   // Save deployment info for the Python script
   const deploymentInfo = {
     contractAddress: contractAddress,
     deployerAddress: deployer.address,
     initialRegistrar: initialRegistrar,
+    testRegistrarAddress: signers.length > 1 ? signers[1].address : null,
     deploymentHash: citationRegistry.deploymentTransaction().hash,
     network: "localhost",
     timestamp: new Date().toISOString()
@@ -62,6 +80,9 @@ async function main() {
   console.log("Contract Address:", contractAddress);
   console.log("Deployer Address:", deployer.address);
   console.log("Initial Registrar:", initialRegistrar);
+  if (signers.length > 1) {
+    console.log("Test Registrar (Account 1):", signers[1].address);
+  }
   console.log("Network: http://127.0.0.1:8545");
 
   return deploymentInfo;
