@@ -649,9 +649,9 @@ class ChatWindow(QtWidgets.QMainWindow):
             self.civi_add_info(self.debug_metadata(metadata))
     
     def debug_metadata(self, metadata: dict):
-        msg = "Cited paper:\nTitle: {}\nAuthors: {}\nDOI: {}\nDate: {}\nJournal: {}".format(
+        msg = "Cited paper:\nTitle: {}\nauthor: {}\nDOI: {}\nDate: {}\nJournal: {}".format(
             metadata.get("title"),
-            metadata.get("authors"),
+            metadata.get("author"),
             metadata.get("doi"),
             metadata.get("date"),
             metadata.get("journal"),

@@ -47,7 +47,7 @@ class _AuthEnvelopeFallback(BaseModel):
 class _MetadataFallback(BaseModel):
     doi: Optional[str] = None
     title: Optional[str] = None
-    authors: Optional[List[str]] = None
+    author: Optional[List[str]] = None
     date: Optional[str] = None  # YYYY-MM-DD
 
 class _RegisterRequestFallback(BaseModel):
@@ -231,13 +231,13 @@ def hash_hashedDoi(doi: str) -> bytes:
     # DOI: 小写 + NFKC + 叶前缀 0x00
     return _h00(_canon_str((doi or ""), lower=True))
 
-def _authors_root(authors: List[str]) -> bytes:
-    leaves = [_h00(_canon_str(a)) for a in (authors or [])]
+def _author_root(author: List[str]) -> bytes:
+    leaves = [_h00(_canon_str(a)) for a in (author or [])]
     return _reduce_pairs(leaves)
 
-def hash_hashedTAD(title: str, authors: List[str], date_iso: str) -> bytes:
+def hash_hashedTAD(title: str, author: List[str], date_iso: str) -> bytes:
     h_title = _h00(_canon_str(title))
-    h_auth = _authors_root(authors)
+    h_auth = _author_root(author)
     n_ta = _h01(h_title, h_auth)
     h_date = _h00(_canon_str(date_iso))
     return _h01(n_ta, h_date)
@@ -245,7 +245,7 @@ def hash_hashedTAD(title: str, authors: List[str], date_iso: str) -> bytes:
 def metadata_root_from(md: Metadata) -> bytes:
     md_dict = _to_dict(md)
     title = md_dict.get("title") or ""
-    authors = md_dict.get("authors") or []
+    author = md_dict.get("author") or []
     date_str = md_dict.get("date")
     if date_str is None:
         raise HTTPException(status_code=400, detail="metadata.date must be YYYY-MM-DD")
@@ -254,7 +254,7 @@ def metadata_root_from(md: Metadata) -> bytes:
     doi = md_dict.get("doi") or ""
 
     h_title = _h00(_canon_str(title))
-    h_auth = _authors_root(authors)
+    h_auth = _author_root(author)
     n_ta = _h01(h_title, h_auth)
 
     h_doi = _h00(_canon_str(doi, lower=True))
@@ -308,17 +308,17 @@ def _resolve_doc_id_by_metadata(c, md: Metadata) -> int:
     md_dict = _to_dict(md)
     doi = md_dict.get("doi")
     title = md_dict.get("title")
-    authors = md_dict.get("authors") or []
+    author = md_dict.get("author") or []
     date_str = md_dict.get("date")
 
     if doi:
         did = c.functions.getDocIdByDoi(hash_hashedDoi(doi)).call()
         return int(did)
 
-    if not (title and isinstance(authors, list) and date_str):
-        raise HTTPException(status_code=400, detail="need doc_id or complete metadata (title/authors/date)")
+    if not (title and isinstance(author, list) and date_str):
+        raise HTTPException(status_code=400, detail="need doc_id or complete metadata (title/author/date)")
     norm_date = date.fromisoformat(str(date_str)).isoformat()
-    did = c.functions.getDocIdByTAD(hash_hashedTAD(title, authors, norm_date)).call()
+    did = c.functions.getDocIdByTAD(hash_hashedTAD(title, author, norm_date)).call()
     return int(did)
 
 def _resolve_doc_id(c, doc_id_opt: Optional[int], md_opt: Optional[Metadata]) -> int:
@@ -357,7 +357,7 @@ def register(req: RegisterRequest):
     norm_date = date.fromisoformat(str(md_dict["date"])).isoformat()
 
     h_doi = hash_hashedDoi(md_dict.get("doi") or "")
-    h_tad = hash_hashedTAD(md_dict.get("title") or "", md_dict.get("authors") or [], norm_date)
+    h_tad = hash_hashedTAD(md_dict.get("title") or "", md_dict.get("author") or [], norm_date)
     md_root = metadata_root_from(md)
     ft_root = fulltext_root_from(getattr(req, "full_text", None) or md_dict.get("full_text") or "", getattr(req, "chunk_size", None) or 4096)
 
@@ -375,7 +375,7 @@ def register(req: RegisterRequest):
             "onchain_metadata_root": None,
             "onchain_fulltext_root": None,
             "details": {
-                "checked_fields": ["doi", "title", "authors", "date"],
+                "checked_fields": ["doi", "title", "author", "date"],
                 "recovered_admin": recovered
             },
             "is_retracted": None
@@ -397,7 +397,7 @@ def register(req: RegisterRequest):
             "onchain_metadata_root": None,
             "onchain_fulltext_root": None,
             "details": {
-                "checked_fields": ["doi", "title", "authors", "date"],
+                "checked_fields": ["doi", "title", "author", "date"],
                 "recovered_admin": recovered
             },
             "is_retracted": None
@@ -416,7 +416,7 @@ def register(req: RegisterRequest):
         "onchain_metadata_root": Web3.to_hex(on_md) if on_md is not None else None,
         "onchain_fulltext_root": Web3.to_hex(on_ft) if on_ft is not None else None,
         "details": {
-            "checked_fields": ["doi", "title", "authors", "date"],
+            "checked_fields": ["doi", "title", "author", "date"],
             "recovered_admin": recovered
         },
         "is_retracted": bool(isr) if isr is not None else None
@@ -498,7 +498,7 @@ def papers_edit(req: EditRequest):
     norm_date = date.fromisoformat(str(md_dict.get("date"))).isoformat()
 
     new_h_doi = hash_hashedDoi(md_dict.get("doi") or "")
-    new_h_tad = hash_hashedTAD(md_dict.get("title") or "", md_dict.get("authors") or [], norm_date)
+    new_h_tad = hash_hashedTAD(md_dict.get("title") or "", md_dict.get("author") or [], norm_date)
     new_md_root = metadata_root_from(new_md)
     new_ft_root = fulltext_root_from(getattr(req, "new_full_text", None) or "", getattr(req, "chunk_size", None) or 4096)
 
@@ -526,14 +526,14 @@ def validate_complete(req: CompleteValidateRequest):
     md = dict(req.metadata or {})
     doi = md.get("doi")
     title = md.get("title")
-    authors = md.get("authors") or []
+    author = md.get("author") or []
     date_str = md.get("date")
-    if not doi or not title or not isinstance(authors, list) or date_str is None:
-        raise HTTPException(status_code=400, detail="metadata must include doi, title, authors(list), date(YYYY-MM-DD)")
+    if not doi or not title or not isinstance(author, list) or date_str is None:
+        raise HTTPException(status_code=400, detail="metadata must include doi, title, author(list), date(YYYY-MM-DD)")
 
     hashed_doi = hash_hashedDoi(doi)
     norm_date = date.fromisoformat(date_str).isoformat()
-    hashed_tad = hash_hashedTAD(title, authors, norm_date)
+    hashed_tad = hash_hashedTAD(title, author, norm_date)
 
     meta_leaves = make_metadata_leaves(md)
     metadata_root, _ = build_merkle(meta_leaves)
@@ -572,17 +572,17 @@ def validate_complete(req: CompleteValidateRequest):
         fulltext_root="0x" + fulltext_root.hex(),
         onchain_metadata_root=Web3.to_hex(on_metadata_root),
         onchain_fulltext_root=Web3.to_hex(on_fulltext_root),
-        details={"checked_fields": ["doi","title","authors","date"]}
+        details={"checked_fields": ["doi","title","author","date"]}
     )
 
 
 
 @app.get("/paper/status")
-def paper_status(doc_id: Optional[int] = None, doi: Optional[str] = None, title: Optional[str] = None, authors: Optional[str] = None, date: Optional[str] = None):
+def paper_status(doc_id: Optional[int] = None, doi: Optional[str] = None, title: Optional[str] = None, author: Optional[str] = None, date: Optional[str] = None):
     """
     Convenience GET endpoint to query paper status directly by query params.
-    You can pass ?doc_id= or ?doi= or (?title=&?authors=&?date=) where
-    authors is comma-separated.
+    You can pass ?doc_id= or ?doi= or (?title=&?author=&?date=) where
+    author is comma-separated.
     """
     c = _load_contract()
     target_doc_id = None
@@ -594,16 +594,16 @@ def paper_status(doc_id: Optional[int] = None, doi: Optional[str] = None, title:
             target_doc_id = int(did)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"getDocIdByDoi failed: {e}")
-    elif title and authors and date:
+    elif title and author and date:
         try:
-            authors_list = [a.strip() for a in authors.split(",") if a.strip()]
+            author_list = [a.strip() for a in author.split(",") if a.strip()]
             norm_date = date.strip()
-            did = c.functions.getDocIdByTAD(hash_hashedTAD(title, authors_list, norm_date)).call()
+            did = c.functions.getDocIdByTAD(hash_hashedTAD(title, author_list, norm_date)).call()
             target_doc_id = int(did)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"getDocIdByTAD failed: {e}")
     else:
-        raise HTTPException(status_code=400, detail="need doc_id or doi or title+authors+date")
+        raise HTTPException(status_code=400, detail="need doc_id or doi or title+author+date")
 
     if not target_doc_id:
         raise HTTPException(status_code=404, detail="paper not found")

@@ -18,7 +18,7 @@ def _make_id(paper: dict) -> str:
     hid = hashlib.sha1(base.encode("utf-8")).hexdigest()[:10]
     return f"tY-{hid}"
 
-def _join_authors(auth):
+def _join_author(auth):
     if isinstance(auth, list):
         return ", ".join([_norm(a) for a in auth if _norm(a)])
     return _norm(auth)
@@ -33,12 +33,12 @@ def _build_page_content(p: dict) -> str:
     date  = _norm(p.get("date"))
     doi   = _norm(p.get("doi"))
     jnl   = _norm(p.get("journal"))
-    auths = _join_authors(p.get("authors"))
+    auths = _join_author(p.get("author"))
     ab    = _norm(p.get("abstract"))
 
     return (
         f"TITLE: {title}\n"
-        f"AUTHORS: {auths}\n"
+        f"author: {auths}\n"
         f"DATE: {date}\n"
         f"DOI: {doi}\n"
         f"JOURNAL: {jnl}\n"
@@ -59,7 +59,7 @@ def load_documents(json_path: str) -> List[Document]:
             "title": _norm(paper.get("title")),
             "date": _norm(paper.get("date")),
             "doi": _norm(paper.get("doi")),
-            "authors": _join_authors(paper.get("authors")),
+            "author": _join_author(paper.get("author")),
             "journal": _norm(paper.get("journal")),
             "abstract": _norm(paper.get("abstract")),
         }

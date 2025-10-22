@@ -71,10 +71,10 @@ def _format_docs(docs, max_chars: int = 900) -> str:
         md = getattr(d, "metadata", {}) or {}
         title = md.get("title", "") or ""
         year  = md.get("year", "") or ""
-        authors = md.get("authors", "") or ""
+        author = md.get("author", "") or ""
         doi   = md.get("doi", "") or ""
         excerpt = (getattr(d, "page_content", "") or "").strip()[:max_chars]
-        lines.append(f"- TITLE: {title}\n  AUTHORS: {authors}\n  YEAR: {year}\n  DOI: {doi}\n  EXCERPT: {excerpt}")
+        lines.append(f"- TITLE: {title}\n  author: {author}\n  YEAR: {year}\n  DOI: {doi}\n  EXCERPT: {excerpt}")
     return "\n\n".join(lines)
 
 def _revise_instruction_natural(single_title: str) -> str:

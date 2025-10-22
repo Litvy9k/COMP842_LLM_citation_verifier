@@ -107,8 +107,8 @@ except Exception:
         if isinstance(d, str):
             return _date.fromisoformat(d).isoformat()
         raise ValueError("date must be str or date")
-    def hash_hashedTAD(title: str, authors: List[str], date_value: Any) -> bytes:
-        payload = {"title": (title or "").strip(), "authors": [str(a).strip() for a in (authors or [])], "date": _normalize_date(date_value)}
+    def hash_hashedTAD(title: str, author: List[str], date_value: Any) -> bytes:
+        payload = {"title": (title or "").strip(), "author": [str(a).strip() for a in (author or [])], "date": _normalize_date(date_value)}
         return hashlib.sha256(canonical_json_bytes(payload)).digest()
     def normalize_doi(doi: str) -> str:
         v = (doi or "").strip().lower()
@@ -247,11 +247,11 @@ def _to_dict(x: Any) -> dict:
         d = dict(x)
     else:
         d = {k: getattr(x, k) for k in dir(x) if not k.startswith("_")}
-    # authors ↔ author 双向同步（向后兼容）
-    if "author" not in d and "authors" in d:
-        d["author"] = d.get("authors") or []
-    if "authors" not in d and "author" in d:
-        d["authors"] = d.get("author") or []
+    # author ↔ author 双向同步（向后兼容）
+    if "author" not in d and "author" in d:
+        d["author"] = d.get("author") or []
+    if "author" not in d and "author" in d:
+        d["author"] = d.get("author") or []
     return d
 
 # -------------------------------------------------
@@ -408,10 +408,10 @@ def _assert_registrar_role(auth: AuthEnvelope) -> str:
 def register(req: RegisterRequest):
     recovered = _assert_registrar_role(req.auth)
     md = _to_dict(req.metadata)
-    doi = md["doi"]; title = md["title"]; authors = md["author"]; date_str = md["date"]
+    doi = md["doi"]; title = md["title"]; author = md["author"]; date_str = md["date"]
 
     hashed_doi = hash_hashedDoi(doi)
-    hashed_tad = hash_hashedTAD(title, authors, date.fromisoformat(date_str).isoformat())
+    hashed_tad = hash_hashedTAD(title, author, date.fromisoformat(date_str).isoformat())
     md_root = metadata_root_from(md)
     ft_root = fulltext_root_from(req.full_text or "", req.chunk_size or 4096)
 
@@ -539,11 +539,11 @@ def papers_edit(req: EditRequest):
 
     # 新文注册
     new_md = _to_dict(req.new_metadata)
-    doi = new_md["doi"]; title = new_md["title"]; authors = new_md["author"]; date_str = new_md["date"]
+    doi = new_md["doi"]; title = new_md["title"]; author = new_md["author"]; date_str = new_md["date"]
     md_root = metadata_root_from(new_md)
     ft_root = fulltext_root_from(getattr(req, "new_full_text", None) or "", getattr(req, "chunk_size", None) or 4096)
     h_doi = hash_hashedDoi(doi)
-    h_tad = hash_hashedTAD(title, authors, date.fromisoformat(date_str).isoformat())
+    h_tad = hash_hashedTAD(title, author, date.fromisoformat(date_str).isoformat())
     reg_name = _find_register_method(c)
     tx2 = _send_tx(getattr(c.functions, reg_name)(h_doi, h_tad, md_root, ft_root))
 
@@ -560,11 +560,11 @@ def papers_edit(req: EditRequest):
 @app.post("/validate/complete-metadata", response_model=ValidateResponse)
 def validate_complete(req: CompleteValidateRequest):
     md = _to_dict(req.metadata or {})
-    doi = md.get("doi"); title = md.get("title"); authors = md.get("author"); date_str = md.get("date")
-    if not (doi and title and isinstance(authors, list) and date_str):
+    doi = md.get("doi"); title = md.get("title"); author = md.get("author"); date_str = md.get("date")
+    if not (doi and title and isinstance(author, list) and date_str):
         raise HTTPException(status_code=400, detail="metadata must include doi,title,author(list),date")
     h_doi = hash_hashedDoi(doi)
-    h_tad = hash_hashedTAD(title, authors, date.fromisoformat(date_str).isoformat())
+    h_tad = hash_hashedTAD(title, author, date.fromisoformat(date_str).isoformat())
     md_root = metadata_root_from(md)
     ft_root = fulltext_root_from(getattr(req, "full_text", None) or "", getattr(req, "chunk_size", None) or 4096)
 
@@ -592,7 +592,7 @@ def validate_complete(req: CompleteValidateRequest):
     )
 
 @app.get("/paper/status")
-def paper_status(doc_id: Optional[int] = None, doi: Optional[str] = None, title: Optional[str] = None, authors: Optional[str] = None, date: Optional[str] = None):
+def paper_status(doc_id: Optional[int] = None, doi: Optional[str] = None, title: Optional[str] = None, author: Optional[str] = None, date: Optional[str] = None):
     c = _load_contract()
     target_doc_id = None
     if doc_id is not None:
@@ -600,8 +600,8 @@ def paper_status(doc_id: Optional[int] = None, doi: Optional[str] = None, title:
     elif doi and doi.strip():
         did = c.functions.getDocIdByDoi(hash_hashedDoi(doi)).call()
         target_doc_id = int(did)
-    elif title and authors and date:
-        author_list = [a.strip() for a in authors.split(",") if a.strip()]
+    elif title and author and date:
+        author_list = [a.strip() for a in author.split(",") if a.strip()]
         h = hash_hashedTAD(title, author_list, date)
         names = {f["name"] for f in getattr(c, "abi", []) if f.get("type") == "function"}
         if "getDocIdByTAD" in names:
