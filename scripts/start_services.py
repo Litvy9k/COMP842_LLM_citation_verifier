@@ -264,7 +264,7 @@ class ServiceManager:
                 return False
 
             self.processes["hardhat"] = process
-            print("Hardhat node started successfully on http://127.0.0.1:8545")
+            print("Hardhat node started")
             print()
             return True
 
@@ -408,12 +408,49 @@ class ServiceManager:
             )
 
             self.processes["backend"] = process
-            print("Backend API started on http://127.0.0.1:8000")
+            print("Backend API started")
             print()
             return True
 
         except Exception as e:
             print(f"Error starting backend: {e}")
+            print()
+            return False
+
+    def start_frontend(self) -> bool:
+        """Start the frontend development server (React)"""
+        print("\n" + "="*70)
+        self.log("STARTING FRONTEND DEV SERVER")
+        print("="*70)
+
+        # Frontend lives at project root with package.json
+        project_root = self.base_dir
+        if not (project_root / "package.json").exists():
+            print("No package.json found at project root; skipping frontend startup")
+            return True
+
+        try:
+            print()
+            print("Starting frontend server (npm start)...")
+            print("Running: npm start")
+            print()
+            process = subprocess.Popen(
+                ["npm", "start"],
+                cwd=project_root,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
+            )
+
+            self.processes["frontend"] = process
+            print("Frontend dev server started")
+            print()
+            return True
+
+        except Exception as e:
+            print(f"Error starting frontend: {e}")
             print()
             return False
 
@@ -502,7 +539,7 @@ class ServiceManager:
                     "metadata": {
                         "doi": paper["doi"],
                         "title": paper["title"],
-                        "author": [a.strip() for a in paper.get("author", "").split(", ")] if isinstance(paper.get("author"), str) else [], 
+                        "author": [a.strip() for a in paper.get("author", "").split(", ")] if isinstance(paper.get("author"), str) else paper.get("author", []),
                         "date": paper.get("date", ""),
                         "abstract": paper.get("abstract", ""),
                         "journal": paper.get("journal", "")
@@ -662,20 +699,34 @@ class ServiceManager:
                 print()
                 return False
 
-            print("\n" + "="*60)
-            print("SERVICES STARTED SUCCESSFULLY!")
-            print("="*60)
+            # Start frontend
+            if not self.start_frontend():
+                print("ERROR: Frontend startup failed. Exiting.")
+                print()
+                return False
+
+            print("\n" + "="*70)
+            print("ALL SERVICES STARTED SUCCESSFULLY!")
+            print("="*70)
             print(f"Admin Address: {pk_data['address']}")
             if contract_address:
                 print(f"Contract Address: {contract_address}")
-            print("Hardhat Node (Ethereum): http://127.0.0.1:8545")
-            print("Backend API: http://127.0.0.1:8000")
-            print("Backend Health Check: http://127.0.0.1:8000/")
-            print("Papers loaded from rag_query/paper.json")
-            print("Backend API running on port 8000")
-            print("\nStarting live output monitoring...")
+            print()
+            print("Service URLs:")
+            print(f"   - Hardhat Node (Ethereum): http://127.0.0.1:8545")
+            print(f"   - Backend API: http://127.0.0.1:8000")
+            print(f"   - Backend Health Check: http://127.0.0.1:8000/")
+            print(f"   - Web Interface (React Dev): http://127.0.0.1:3000")
+            print()
+            print("Papers loaded from rag_query/paper.json into the backend")
+            print("MetaMask Network Configuration:")
+            print("   - RPC URL: http://127.0.0.1:8545")
+            print("   - Chain ID: 1337")
+            print("   - Symbol: ETH")
+            print()
+            print("Starting live output monitoring...")
             print("Press Ctrl+C to stop all services")
-            print("="*60)
+            print("="*70)
 
             # Start monitoring output from both services
             self.start_output_monitoring()
