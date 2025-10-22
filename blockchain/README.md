@@ -3,7 +3,7 @@
 Four bytes32 values, in this order:
 
 1.  `hashedDoi`: SHA256(canonicaljson("10.3352/jeehp.2013.10.3")) (use the full DOI string; arXiv papers use DOI format 10.48550/arxiv.XXXXX)
-2.  `hashedTAD`: SHA256(canonicaljson({"title": "...", "authors": [...], "date": "YYYY-MM-DD"}))
+2.  `hashedTAD`: SHA256(canonicaljson({"title": "...", "author": [...], "date": "YYYY-MM-DD"}))
 3.  `metadataRoot`: Merkle root of full metadata
 4.  `fullTextRoot`: Merkle root of text chunks
 

@@ -33,8 +33,8 @@ def _normalize_date(d: date | str) -> str:
             raise ValueError("date must be ISO format YYYY-MM-DD")
     raise ValueError("date must be a date or ISO string")
 
-def hash_hashedTAD(title: str, authors: List[str], date_value: date | str) -> bytes:
+def hash_hashedTAD(title: str, author: List[str], date_value: date | str) -> bytes:
     title_norm = (title or "").strip()
-    authors_norm = [str(a).strip() for a in (authors or [])]
-    payload = {"title": title_norm, "authors": authors_norm, "date": _normalize_date(date_value)}
+    author_norm = [str(a).strip() for a in (author or [])]
+    payload = {"title": title_norm, "author": author_norm, "date": _normalize_date(date_value)}
     return sha256_b32(canonical_json_bytes(payload))

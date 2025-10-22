@@ -28,7 +28,7 @@ class RegisterRequest(BaseModel):
     auth: AuthPayload
     metadata: Dict[str, Any] = Field(
         ...,
-        description='Paper metadata. Must contain: "doi", "title", "authors"[list], "date" (YYYY-MM-DD).'
+        description='Paper metadata. Must contain: "doi", "title", "author"[list], "date" (YYYY-MM-DD).'
     )
     full_text: Optional[str] = Field(
         default=None,
@@ -63,7 +63,7 @@ class RegisterResponse(BaseModel):
 
 class RetractionStatusRequest(BaseModel):
     """
-    Query retraction by doc_id or metadata (with doi OR title+authors+date).
+    Query retraction by doc_id or metadata (with doi OR title+author+date).
     """
     doc_id: Optional[int] = None
     metadata: Optional[Dict[str, Any]] = None
@@ -88,7 +88,7 @@ class EditRequest(BaseModel):
     """
     Edit a paper: retract the old one, then register a new one.
     old_doc_id or old_metadata is required.
-    new_metadata must include doi/title/authors/date.
+    new_metadata must include doi/title/author/date.
     """
     auth: AuthPayload
 
@@ -132,12 +132,12 @@ class ValidateResponse(BaseModel):
 class CompleteValidateRequest(BaseModel):
     """
     Backward-compatible request model for the /validate (complete) endpoint.
-    Identify the paper by doc_id OR metadata (with doi OR title+authors+date).
+    Identify the paper by doc_id OR metadata (with doi OR title+author+date).
     Extra fields are optional so older code won't crash.
     """
     # ways to identify the paper
     doc_id: Optional[int] = None
-    metadata: Optional[Dict[str, Any]] = None  # expects keys: doi/title/authors/date (YYYY-MM-DD)
+    metadata: Optional[Dict[str, Any]] = None  # expects keys: doi/title/author/date (YYYY-MM-DD)
 
     # optional helpers some implementations may read
     hashed_doi: Optional[str] = None
