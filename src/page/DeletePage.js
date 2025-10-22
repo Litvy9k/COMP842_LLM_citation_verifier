@@ -63,7 +63,7 @@ const CitationDeletePage = () => {
           isRetracted: false,
           metadataRoot: null,
         });
-        setStatusMessage("Citation not found in registry.");
+        setStatusMessage("Proceed with retraction.");
       }
     } catch (error) {
       console.error("Citation search error:", error);
@@ -89,28 +89,33 @@ const handleRetractCitation = async () => {
       return;
     }
 
-    // First, check if citation exists and get its status
-    await fetchCitationStatus(foundCitation.doi);
-
-    // Wait a bit for state to update
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    // Check if citation was found after the search
-    if (!foundCitation.docId) {
-      setStatusMessage("Citation not found in registry.");
-      return;
-    }
-
-    if (foundCitation.isRetracted) {
-      setStatusMessage("This citation has already been retracted.");
-      return;
-    }
-
     setIsLoading(true);
     setStatusMessage("Preparing retraction transaction...");
 
-    // Call smart contract directly for retraction using the actual metadata root
-    const result = await retractPaper(foundCitation.docId, signer, foundCitation.metadataRoot);
+    // Get the contract and find the paper by DOI
+    const contract = await createContractInstance(signer);
+
+    // Hash the DOI to match blockchain storage format
+    const hashedDoiBytes = hashHashedDoi(foundCitation.doi);
+    const hashedDoiHex = bytesToHex(hashedDoiBytes);
+
+    // Query smart contract for docId
+    const docIdBigInt = await contract.getDocIdByDoi(hashedDoiHex);
+    const docId = Number(docIdBigInt);
+
+    if (!docId || docId <= 0) {
+      throw new Error("Paper not found: The citation does not exist in the registry.");
+    }
+
+    // Get paper details to check retraction status
+    const [, , isRetracted] = await contract.getPaper(docId);
+
+    if (isRetracted) {
+      throw new Error("This citation has already been retracted.");
+    }
+
+    // Call smart contract for retraction
+    const result = await retractPaper(docId, signer);
 
     if (result.success) {
       // Update local state
