@@ -141,8 +141,11 @@ const CitationAlterPage = () => {
 
       setStatusMessage("Retracting original citation...");
 
-      // Step 1: Retract the original citation without metadata validation
-      const retractResult = await retractPaper(foundCitation.docId, signer, "0x0000000000000000000000000000000000000000000000000000000000000000");
+      // Get the current paper's metadata root from blockchain for validation
+      const [currentMetadataRoot] = await contract.getPaper(foundCitation.docId);
+
+      // Step 1: Retract the original citation with proper metadata validation
+      const retractResult = await retractPaper(foundCitation.docId, signer, currentMetadataRoot);
 
       if (!retractResult.success) {
         throw new Error("Failed to retract original citation");

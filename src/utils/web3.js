@@ -327,10 +327,6 @@ export const checkRetractionStatus = async (docId, contract) => {
  */
 export const retractPaper = async (docId, signer, expectedMetadataRoot = null) => {
   try {
-    if (!docId || docId <= 0) {
-      throw new Error('Invalid docId: must be a positive number');
-    }
-
     const contract = await createContractInstance(signer);
 
     // Check if docId exists and validate metadata matches
