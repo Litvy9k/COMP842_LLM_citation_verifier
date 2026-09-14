@@ -46,7 +46,6 @@ venv/
 .DS_Store
 .vscode/
 .idea/
-add .gitignore to omit unwanted files
 
 # Model and environment directories
 mistral-env/
